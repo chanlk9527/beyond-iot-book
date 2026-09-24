@@ -1,28 +1,24 @@
-# 《软件系统的隐藏复杂性》
+# 《IoT 平台设计》
 
-副标题：从数据语义、代码设计到交互、运行与演进
+副标题：从设备接入、数据语义到平台运行与演进
 
-这是一本讨论软件开发中的隐藏假设与设计取舍的书。它从一个字段、一段抽象和一次用户操作出发，逐步解释代码组织、交互状态、异步协作、性能与演进，最终回答一个问题：
+这是一本关于 IoT 平台设计的系列书稿。当前仓库保留上一册的目录、章节层级和站点风格，正文与专属资源已清空，等待填充新的平台内容。
 
 > 当我们在真实世界里构建软件时，应该警惕哪些“理所当然”的假设？
 
 ## 书稿入口
 
 - [全书目录](SUMMARY.md)
-- [章节设计与分册候选](BOOK-DESIGN.md)
 - [引言](manuscript/00-introduction.md)
 - [第 1 章：时间不是一个 `datetime`](manuscript/part-01-values/01-time.md)
-- [时间章的可运行示例](examples/ch01-time/README.md)
 - [原始骨架](骨架.md)
 - [作者人格与行文声音](VOICE.md)
 - [写作约定](WRITING.md)
-- [第一章优化指引](CH01-OPTIMIZATION-GUIDE.md)
-- [第二章结构设计](CH02-IDENTITY-DESIGN.md)
 - [全书图示与表格规范](ILLUSTRATIONS.md)
 
 ## 目录结构
 
-`SUMMARY.md` 是阅读顺序的唯一来源，`BOOK-DESIGN.md` 说明设计依据，`WRITING.md` 约束写作方式；`manuscript/` 保存正文与章节提纲。`骨架.md` 保留最初构思，不作为现行目录。
+`SUMMARY.md` 是阅读顺序的唯一来源，`WRITING.md` 约束写作方式；`manuscript/` 保存正文与章节骨架。`骨架.md` 保留最初构思，不作为现行目录。
 
 旧章节沿用原目录以保持地址；新增主题使用 `design/`、`interaction/`、`execution/`、`replicas/`、`evolution/`、`performance/` 和 `verification/` 等语义目录。页面标题与目录决定章号，文件路径可能保留历史编号。
 
@@ -30,7 +26,7 @@
 
 网站使用 VitePress，部署到 Vercel。安装 Node.js 24 后，在项目根目录执行 `npm ci` 和 `npm run docs:dev` 即可本地阅读；`npm run docs:build` 生成正式网站。
 
-章节与分部导航来自 `SUMMARY.md`，正文继续维护在 `manuscript/`。含有“本章任务”的提纲章节会显示写作状态，中文搜索、深浅色主题与图示放大均可直接使用。
+章节与分部导航来自 `SUMMARY.md`，正文继续维护在 `manuscript/`。当前章节页只保留标题层级和待填充提示，中文搜索、深浅色主题与图示放大等站点能力仍可直接使用。
 
 第一章采用章首页加十个主题页面，正文位于 `manuscript/part-01-values/01-time/`。全书目录中缩进的主题链接同时驱动侧栏和上一节／下一节；章首页支持按顺序学习和按概念查阅。第一章主题文件按正文节号命名，其中 `01-02-boundaries.md` 合并承载 1.1—1.2 节；网站通过路径映射保留已发布页面地址及旧锚点。
 

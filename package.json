@@ -1,12 +1,10 @@
 {
-  "name": "beyond-crud-book",
+  "name": "beyond-iot-book",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "predocs:dev": "node .vitepress/prepare.mjs",
     "docs:dev": "vitepress dev --host 127.0.0.1",
-    "predocs:build": "node .vitepress/prepare.mjs",
     "docs:build": "vitepress build",
     "docs:preview": "vitepress preview --host 127.0.0.1"
   },

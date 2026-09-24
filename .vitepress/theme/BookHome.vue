@@ -8,17 +8,17 @@ const { theme } = useData()
     <section class="book-hero" aria-labelledby="book-title">
       <div class="book-intro">
         <p class="book-eyebrow">BEYOND CRUD <span>在线书稿</span></p>
-        <h1 id="book-title">软件系统的<br><span>隐藏复杂性</span></h1>
-        <p class="book-subtitle">从数据语义、代码设计到交互、运行与演进</p>
-        <p class="book-description">从一个字段、一段抽象和一次用户操作出发，理解软件中的隐藏假设，以及每种设计选择带来的责任与代价。</p>
+        <h1 id="book-title">IoT 平台<br><span>设计方法</span></h1>
+        <p class="book-subtitle">从设备接入、数据语义到平台运行与演进</p>
+        <p class="book-description">沿用系列书稿的结构与阅读体验，逐步填充 IoT 平台中的模型、协议、可靠性和运维实践。</p>
         <div class="book-actions">
           <a class="book-primary" :href="withBase(theme.book.introduction.link)">开始阅读 <span aria-hidden="true">→</span></a>
           <a class="book-secondary" :href="withBase('/contents')">浏览全书目录 <span aria-hidden="true">↗</span></a>
         </div>
         <p class="book-status">持续写作中 · 从引言和第一章开始</p>
       </div>
-      <div class="book-cover" aria-label="《软件系统的隐藏复杂性》封面">
-        <img src="/software-hidden-complexity-cover.png" alt="《软件系统的隐藏复杂性》书籍封面：剖开的软件模块与贯穿其中的橙色路径" />
+      <div class="book-cover book-cover-placeholder" aria-label="IoT 平台设计书稿封面">
+        <span>IoT<br>平台</span>
       </div>
     </section>
 
@@ -36,6 +36,6 @@ const { theme } = useData()
         </a>
       </div>
     </section>
-    <footer class="book-home-footer"><span>《软件系统的隐藏复杂性》</span><span>在写代码之前，先把问题说清楚。</span></footer>
+    <footer class="book-home-footer"><span>《IoT 平台设计》</span><span>先把平台中的条件和边界说清楚。</span></footer>
   </div>
 </template>

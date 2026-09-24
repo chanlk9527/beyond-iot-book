@@ -4,5 +4,4 @@ node_modules/
 .vitepress/config.*.timestamp-*
 .vercel/
 .idea/
-public/examples/ch01-time/TimeExamples.java
 *.log

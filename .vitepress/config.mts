@@ -9,16 +9,15 @@ const readingOrder = [book.introduction, ...book.parts.flatMap(part => [
 
 export default defineConfig({
   lang: 'zh-CN',
-  title: '软件系统的隐藏复杂性',
-  description: '从数据语义、代码设计到交互、运行与演进。一本讨论软件开发中的隐藏假设、机制与设计取舍的在线书稿。',
+  title: 'IoT 平台设计',
+  description: '从设备接入、数据语义到平台运行与演进的在线书稿。',
   cleanUrls: true,
-  srcExclude: ['README.md', 'WRITING.md', 'BOOK-DESIGN.md', 'VOICE.md', 'ILLUSTRATIONS.md', 'CH01-*.md', 'CH02-*.md', '骨架.md', 'DEPLOYMENT.md', 'tools/**'],
+  srcExclude: ['README.md', 'WRITING.md', 'VOICE.md', 'ILLUSTRATIONS.md', '骨架.md', 'DEPLOYMENT.md'],
   rewrites: {
     ...pageAliases,
     'manuscript/:part/_index.md': ':part/index.md',
     'manuscript/:rest*': ':rest*',
     'SUMMARY.md': 'contents.md',
-    'examples/ch01-time/README.md': 'examples/ch01-time/index.md'
   },
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
@@ -50,12 +49,6 @@ export default defineConfig({
             const source = relative(projectRoot, originalPath).replace(/\\/g, '/')
             if (source.startsWith('manuscript/') && pathname.endsWith('.md')) token.attrSet('href', toPageLink(source) + suffix)
             else if (source === 'SUMMARY.md') token.attrSet('href', '/contents' + suffix)
-            else if (source === 'examples/ch01-time/README.md') token.attrSet('href', '/examples/ch01-time/' + suffix)
-            else if (source.startsWith('examples/') && pathname.endsWith('.md')) token.attrSet('href', '/' + source.slice(0, -3) + suffix)
-            else if (source === 'examples/ch01-time/TimeExamples.java') {
-              token.attrSet('href', '/examples/ch01-time/TimeExamples.java')
-              token.attrSet('download', 'TimeExamples.java')
-            }
           }
         }
       })
@@ -74,16 +67,12 @@ export default defineConfig({
     if (pageData.filePath === 'SUMMARY.md') {
       Object.assign(pageData.frontmatter, { title: '全书目录', outline: false, prev: false, next: false })
     }
-    if (pageData.filePath === 'examples/ch01-time/README.md') {
-      Object.assign(pageData.frontmatter, { prev: false, next: false })
-    }
   },
   themeConfig: {
     siteTitle: '隐藏复杂性',
     nav: [
       { text: '开始阅读', link: book.introduction.link },
       { text: '全书目录', link: '/contents' },
-      { text: '代码示例', link: '/examples/ch01-time/' }
     ],
     sidebar: [
       { text: '阅读入口', items: [book.introduction, { text: '全书目录', link: '/contents' }] },
