@@ -3,7 +3,7 @@ import { dirname, relative, resolve } from 'node:path'
 import { readBook, readText, projectRoot, toPageLink, flattenItems, pageAliases } from './book.mts'
 
 const book = readBook()
-const readingOrder = [book.introduction, ...book.parts.flatMap(part => [
+const readingOrder = [...book.parts.flatMap(part => [
   { text: part.text, link: part.link }, ...flattenItems(part.items)
 ])]
 
@@ -12,7 +12,7 @@ export default defineConfig({
   title: 'IoT 平台设计',
   description: '从设备接入、数据语义到平台运行与演进的在线书稿。',
   cleanUrls: true,
-  srcExclude: ['README.md', 'WRITING.md', 'VOICE.md', 'ILLUSTRATIONS.md', '骨架.md', 'DEPLOYMENT.md'],
+  srcExclude: ['README.md', 'BOOK-DESIGN.md', 'WRITING.md', 'VOICE.md', 'ILLUSTRATIONS.md', 'DEPLOYMENT.md'],
   rewrites: {
     ...pageAliases,
     'manuscript/:part/_index.md': ':part/index.md',
@@ -75,7 +75,7 @@ export default defineConfig({
       { text: '全书目录', link: '/contents' },
     ],
     sidebar: [
-      { text: '阅读入口', items: [book.introduction, { text: '全书目录', link: '/contents' }] },
+      { text: '阅读入口', items: [{ text: '全书目录', link: '/contents' }] },
       ...book.parts.map(part => ({
         text: part.text,
         collapsed: true,

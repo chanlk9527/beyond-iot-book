@@ -4,7 +4,6 @@ import { h } from 'vue'
 import BookHome from './BookHome.vue'
 import WritingNotice from './WritingNotice.vue'
 import ImagePreview from './ImagePreview.vue'
-import ChapterRedirect from './ChapterRedirect.vue'
 import './style.css'
 
 export default {
@@ -15,6 +14,5 @@ export default {
   }),
   enhanceApp({ app }) {
     app.component('BookHome', BookHome)
-    app.component('ChapterRedirect', ChapterRedirect)
   }
 } satisfies Theme

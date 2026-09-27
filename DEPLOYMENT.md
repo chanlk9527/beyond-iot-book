@@ -36,11 +36,11 @@ npm run docs:preview
 
 ## 发布内容范围
 
-公开页面包括首页、`SUMMARY.md`、`manuscript/` 下的正文与分部导读，以及第一章示例说明。作者约定、原始骨架、本文件和工具目录不会生成网站页面。Markdown 中引用的图示与示例源代码作为静态资源发布。
+公开页面包括首页、`SUMMARY.md`，以及 `manuscript/` 下的正文与分部导读。作者约定、本文件和设计文档不会生成网站页面。Markdown 中引用的图示作为静态资源发布。
 
-正文网址省略 `manuscript/` 前缀，例如第一章为 `/part-01-values/01-time`。分部导读使用 `/part-01-values/`，目录使用 `/contents`。已有 Markdown 相对链接由主题配置中的构建规则转换。示例源码由 `prepare.mjs` 在开发或构建前复制到公共资源目录，无须维护第二份副本。
+正文网址省略 `manuscript/` 前缀，例如第一章为 `/part-01-iot-platform/01-iot-world`。分部导读使用 `/part-01-iot-platform/`，目录使用 `/contents`。已有 Markdown 相对链接由主题配置中的构建规则转换。示例源码由 `prepare.mjs` 在开发或构建前复制到公共资源目录，无须维护第二份副本。
 
-多页章节保留章首页网址，主题页面位于同名目录，例如 `/part-01-values/01-time/01-boundaries`。`SUMMARY.md` 中章链接下缩进两格的页面会进入章节侧栏和连续阅读顺序。第一章原有 `#sec-1-*` 锚点由 `.vitepress/ch01-anchors.json` 映射到新页面，章首页组件负责兼容跳转。新增或调整锚点时应同步维护该映射。
+多页章节保留章首页网址，主题页面位于同名目录，例如 `/part-01-iot-platform/01-iot-world/01-boundaries`。`SUMMARY.md` 中章链接下缩进两格的页面会进入章节侧栏和连续阅读顺序。新增或调整锚点时应同步维护对应的映射。
 
 保留 VitePress 稳定版本，并将其 Vite 依赖固定到 6.4.3，以修复旧版开发服务器的已知安全问题；升级时同时验证构建、预览与中文搜索。
 
