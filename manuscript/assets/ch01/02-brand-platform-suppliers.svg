@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="460" viewBox="0 0 720 460" role="img" aria-labelledby="title desc">
+  <title id="title">自有平台与外部能力的组合</title>
+  <desc id="desc">品牌自有业务平台支撑品牌应用，外部设备接入与消息能力、基础云资源共同支撑业务平台。外部能力可以来自托管服务或自行部署的软件。箭头表示能力供给方向，不表示实际部署或数据流。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#222"/></marker>
+  </defs>
+  <rect width="720" height="460" fill="#fff"/>
+  <g fill="none" stroke="#222" stroke-width="2" marker-end="url(#arrow)">
+    <path d="M 360 180 V 90"/>
+    <path d="M 180 350 V 312 H 260 V 260"/>
+    <path d="M 540 350 V 312 H 460 V 260"/>
+  </g>
+  <g fill="#fff" stroke="#222" stroke-width="2">
+    <rect x="215" y="25" width="290" height="65" rx="3"/>
+    <rect x="150" y="180" width="420" height="80" rx="3"/>
+    <rect x="25" y="350" width="310" height="80" rx="3"/>
+    <rect x="385" y="350" width="310" height="80" rx="3"/>
+  </g>
+  <g fill="#222" font-family="Noto Sans CJK SC, Microsoft YaHei, PingFang SC, sans-serif" font-size="18" text-anchor="middle">
+    <text x="360" y="52">品牌应用</text>
+    <text x="360" y="78">用户使用产品与服务的入口</text>
+    <text x="360" y="212">品牌自有业务平台</text>
+    <text x="360" y="240">账号 · 产品 · 设备关系 · 业务规则</text>
+    <text x="180" y="382">设备接入与消息能力</text>
+    <text x="180" y="410">采购云服务或部署相应软件</text>
+    <text x="540" y="382">基础云资源</text>
+    <text x="540" y="410">计算 · 存储 · 数据库</text>
+    <text x="410" y="141">业务能力</text>
+    <text x="177" y="294">接入与消息</text>
+    <text x="543" y="294">运行资源</text>
+  </g>
+</svg>
