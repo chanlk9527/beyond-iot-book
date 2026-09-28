@@ -8,7 +8,7 @@ const { theme } = useData()
     <section class="book-hero" aria-labelledby="book-title">
       <div class="book-intro">
         <p class="book-eyebrow">IoT PLATFORM <span>在线书稿</span></p>
-        <h1 id="book-title">IoT 平台<br><span>设计方法</span></h1>
+        <h1 id="book-title">IoT 平台<br><span>设计</span></h1>
         <p class="book-subtitle">从设备接入、数据语义到平台运行与演进</p>
         <p class="book-description">从 IoT 世界地图出发，逐步设计面向设备厂商、开发者与用户的平台。</p>
         <div class="book-actions">
@@ -17,8 +17,8 @@ const { theme } = useData()
         </div>
         <p class="book-status">持续写作中 · 从第一章开始</p>
       </div>
-      <div class="book-cover book-cover-placeholder" aria-label="IoT 平台设计书稿封面">
-        <span>IoT<br>平台</span>
+      <div class="book-cover">
+        <img :src="withBase('/book-cover.png')" alt="《IoT 平台设计》封面：抽象的设备、平台与弧线连接" width="1024" height="1536" fetchpriority="high">
       </div>
     </section>
 
