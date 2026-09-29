@@ -55,9 +55,9 @@
 
 用户通常不会直接看到后台的 IoT 平台。他们真正接触到的，是 App、设备控制界面、消息通知、远程服务和软件升级。
 
-追觅是一个直观的例子。用户购买扫地机器人等设备后，可以通过 Dreamehome 添加设备、查看状态并进行清洁控制。路特创新旗下 Momcozy 的部分智能婴儿监护产品也提供配套应用，用户可以通过手机查看画面和管理设备。
+追觅是一个直观的例子。用户购买扫地机器人等设备后，可以通过 Dreamehome 添加设备、查看状态并进行清洁控制。
 
-这些产品体现了一个重要变化：**消费者买到的不再只是硬件，而是“硬件 + App + 持续在线服务”的组合。**[追觅应用说明](https://ae.dreametech.com/pages/dreamehome-app-download)、[Momcozy 应用与监护产品说明](https://momcozy.com/blogs/babycare/baby-monitor-app-phone-connection-guide)、[路特创新公司招聘介绍](https://jy.scu.edu.cn/data/mcit_editor/20250924/ROOT%E8%B7%AF%E7%89%B9%E5%88%9B%E6%96%B02026%E5%B1%8A%E6%AD%A3%E5%BC%8F%E6%89%B9%E6%A0%A1%E5%9B%AD%E6%8B%9B%E8%81%98%E7%AE%80%E7%AB%A0%281%29%283%29.pdf)
+这些产品体现了一个重要变化：**消费者买到的不再只是硬件，而是“硬件 + App + 持续在线服务”的组合。**[追觅应用说明](https://ae.dreametech.com/pages/dreamehome-app-download)
 
 不过，这里需要注意证据的边界。从 App 和产品功能中，可以判断企业正在向用户提供持续的数字服务，但不能仅凭这些公开现象认定后台系统全部由企业自己开发，也不能据此判断它具体采用了哪一家云服务商。
 

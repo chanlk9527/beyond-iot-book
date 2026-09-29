@@ -11,3 +11,4 @@
   - [1.5 IoT 产品背后的合作模式与长期责任](manuscript/part-01-iot-platform/01-iot-world/05-iot-business.md)
   - [1.6 连接 IoT 世界的技术地图](manuscript/part-01-iot-platform/01-iot-world/06-iot-connectivity.md)
   - [1.7 设备从工厂到用户手中的完整旅程](manuscript/part-01-iot-platform/01-iot-world/07-iot-lifecycle.md)
+  - [1.8 从 IoT 世界地图走向平台：共同问题与基本概念](manuscript/part-01-iot-platform/01-iot-world/08-iot-platform-concepts.md)
