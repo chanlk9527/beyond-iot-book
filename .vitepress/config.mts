@@ -60,6 +60,8 @@ export default defineConfig({
       pageData.frontmatter.writing = /^## 本章任务\s*$/m.test(content)
       const position = readingOrder.findIndex(item => item.link === toPageLink(pageData.filePath))
       if (position >= 0) {
+        // Some manuscript pages start at H2; use the contents label for their page title.
+        pageData.title ||= readingOrder[position].text
         pageData.frontmatter.prev = readingOrder[position - 1] || false
         pageData.frontmatter.next = readingOrder[position + 1] || false
       }
