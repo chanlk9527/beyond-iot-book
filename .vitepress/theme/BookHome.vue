@@ -10,6 +10,10 @@ const { theme } = useData()
         <p class="book-eyebrow">IoT PLATFORM <span>在线书稿</span></p>
         <h1 id="book-title">IoT 平台<br><span>设计</span></h1>
         <p class="book-subtitle">从设备接入、数据语义到平台运行与演进</p>
+        <div class="book-author">
+          <span>作者：Chanlk</span>
+          <span>联系方式：<a href="mailto:chanlk9527@gmail.com">chanlk9527@gmail.com</a></span>
+        </div>
         <p class="book-description">从 IoT 世界地图出发，逐步设计面向设备厂商、开发者与用户的平台。</p>
         <div class="book-actions">
           <a class="book-primary" :href="withBase(theme.book.introduction.link)">开始阅读 <span aria-hidden="true">→</span></a>
