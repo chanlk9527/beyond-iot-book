@@ -18,3 +18,13 @@
   - [2.3 两条链路看懂平台怎样工作](manuscript/part-01-iot-platform/02-nebula-iot-platform/2.3-data-and-control-flows.md)
   - [2.4 同一套平台怎样运行在不同环境](manuscript/part-01-iot-platform/02-nebula-iot-platform/2.4-deployment-models.md)
   - [2.5 平台设计的基本原则](manuscript/part-01-iot-platform/02-nebula-iot-platform/2.5-design-principles.md)
+
+## 第二部分：建立 IoT Core 的领域骨架
+
+- [分部导读](manuscript/part-02-iot-core/_index.md)
+- [第 3 章：设备身份、注册与接入](manuscript/part-02-iot-core/03-device-connect.md)
+  - [3.1 设备进入平台之前：先分清几个概念](manuscript/part-02-iot-core/03-device-connect/01-device-concepts.md)
+  - [3.2 一台设备怎样获得自己的身份](manuscript/part-02-iot-core/03-device-connect/02-device-identity.md)
+  - [3.3 设备生命周期：从激活到退役](manuscript/part-02-iot-core/03-device-connect/03-device-lifecycle.md)
+  - [3.4 设备认证：设备如何证明自己是谁](manuscript/part-02-iot-core/03-device-connect/04-device-authentication.md)
+  - [3.5 设备连接：从认证成功到持续通信](manuscript/part-02-iot-core/03-device-connect/05-device-connection.md)
