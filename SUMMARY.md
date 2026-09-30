@@ -33,3 +33,4 @@
 - [第 4 章：设备模型——平台如何理解设备](manuscript/part-02-iot-core/04-device-model.md)
   - [4.1 从一台设备到一类设备：为什么需要模型](manuscript/part-02-iot-core/04-device-model/01-device-model-basics.md)
   - [4.2 能力模型：设备怎样被软件理解](manuscript/part-02-iot-core/04-device-model/02-capability-model.md)
+  - [4.3 从设备数据到平台模型：设备如何被“翻译”](manuscript/part-02-iot-core/04-device-model/03-device-data-mapping.md)
