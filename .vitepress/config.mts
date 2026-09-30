@@ -3,7 +3,7 @@ import { dirname, relative, resolve } from 'node:path'
 import { readBook, readText, projectRoot, toPageLink, flattenItems, pageAliases } from './book.mts'
 
 const book = readBook()
-const readingOrder = [...book.parts.flatMap(part => [
+const readingOrder = [book.introduction, ...book.parts.flatMap(part => [
   { text: part.text, link: part.link }, ...flattenItems(part.items)
 ])]
 
@@ -77,7 +77,7 @@ export default defineConfig({
       { text: '全书目录', link: '/contents' },
     ],
     sidebar: [
-      { text: '阅读入口', items: [{ text: '全书目录', link: '/contents' }] },
+      { text: '阅读入口', items: [book.introduction, { text: '全书目录', link: '/contents' }] },
       ...book.parts.map(part => ({
         text: part.text,
         collapsed: true,

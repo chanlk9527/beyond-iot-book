@@ -19,7 +19,7 @@ const { theme } = useData()
           <a class="book-primary" :href="withBase(theme.book.introduction.link)">开始阅读 <span aria-hidden="true">→</span></a>
           <a class="book-secondary" :href="withBase('/contents')">浏览全书目录 <span aria-hidden="true">↗</span></a>
         </div>
-        <p class="book-status">持续写作中 · 从第一章开始</p>
+        <p class="book-status">持续写作中 · 从全书引言开始</p>
       </div>
       <div class="book-cover">
         <img :src="withBase('/book-cover.png')" alt="《IoT 平台设计》封面：抽象的设备、平台与弧线连接" width="1024" height="1536" fetchpriority="high">

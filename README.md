@@ -11,6 +11,7 @@
 
 ## 书稿入口
 
+- [全书引言](manuscript/00-introduction.md)
 - [全书目录](SUMMARY.md)
 - [书籍定位与第一章设计](BOOK-DESIGN.md)
 - [第一部分：IoT 世界地图与平台基础](manuscript/part-01-iot-platform/_index.md)
