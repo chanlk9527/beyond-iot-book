@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="510" viewBox="0 0 720 510" role="img" aria-labelledby="title desc">
+<title id="title">设备已执行而平台等待超时</title><desc id="desc">设备完成执行但反馈丢失，平台等待超时只能记为结果未确认。假设设备保存结果且支持查询，平台随后可补充完成结论，并保留超时记录。时间从上向下，不按比例。</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#222"/></marker></defs>
+<style>text{font-family:'Noto Sans CJK SC','Microsoft YaHei','PingFang SC',sans-serif;font-size:18px;fill:#222;text-anchor:middle}rect{fill:#fff;stroke:#222;stroke-width:2;rx:3}.line{fill:none;stroke:#222;stroke-width:2;marker-end:url(#arrow)}.life{stroke:#555;stroke-width:2;stroke-dasharray:6 6}.note{font-size:18px}</style>
+<rect x="0" y="0" width="720" height="510" style="stroke:none"/>
+<rect x="70" y="18" width="180" height="46"/><text x="160" y="48">平台</text>
+<rect x="470" y="18" width="180" height="46"/><text x="560" y="48">设备</text>
+<path class="life" d="M160 64V488 M560 64V488"/>
+<path class="line" d="M160 115H560"/><text x="360" y="102">发送命令 cmd_301</text>
+<rect x="460" y="151" width="200" height="48"/><text x="560" y="182">设备完成执行</text>
+<path d="M560 242H306" fill="none" stroke="#222" stroke-width="2"/>
+<path d="M294 232L314 252 M294 252L314 232" fill="none" stroke="#222" stroke-width="2"/>
+<text x="424" y="229">完成反馈在途中丢失</text>
+<rect x="30" y="281" width="260" height="66"/><text x="160" y="308">等待超时</text><text x="160" y="334">执行结果仍未确认</text>
+<path class="line" d="M160 377H560"/><text x="360" y="366">后续查询该命令的结果</text>
+<path class="line" d="M560 423H160"/><text x="360" y="411">设备返回已保存的执行结果</text>
+<rect x="25" y="447" width="270" height="52"/><text x="160" y="468">补充“已确认完成”</text><text x="160" y="490">保留曾经超时的记录</text>
+</svg>

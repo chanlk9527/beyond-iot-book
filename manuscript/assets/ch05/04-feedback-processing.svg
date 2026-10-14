@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="464" viewBox="0 0 720 464" role="img" aria-labelledby="title desc">
+<title id="title">反馈怎样推进命令状态</title><desc id="desc">先核对命令、设备与反馈含义，再比较已确认进展。有效的新进展按条件更新，重复或落后反馈不回退状态，无法关联的反馈保留为异常。</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#222"/></marker></defs>
+<style>text{font-family:'Noto Sans CJK SC','Microsoft YaHei','PingFang SC',sans-serif;font-size:18px;fill:#222;text-anchor:middle}rect{fill:#fff;stroke:#222;stroke-width:2;rx:3}.line{fill:none;stroke:#222;stroke-width:2;marker-end:url(#arrow)}.life{stroke:#555;stroke-width:2;stroke-dasharray:6 6}.note{font-size:18px}</style>
+<rect x="0" y="0" width="720" height="464" style="stroke:none"/>
+<rect x="210" y="18" width="300" height="48"/><text x="360" y="49">收到设备反馈</text>
+<path class="line" d="M360 66V108"/>
+<rect x="210" y="108" width="300" height="68"/><text x="360" y="137">核对命令、设备</text><text x="360" y="161">及反馈含义</text>
+<path class="line" d="M210 142H140V232"/><text x="238" y="204">不匹配或含义不明</text>
+<path class="line" d="M510 142H560V232"/><text x="610" y="204">有效反馈</text>
+<rect x="30" y="232" width="220" height="64"/><text x="140" y="258">保留异常记录</text><text x="140" y="284">不推进命令状态</text>
+<rect x="420" y="232" width="280" height="64"/><text x="560" y="258">比较已确认的进展</text><text x="560" y="284">与本次反馈</text>
+<path class="line" d="M560 296V384"/><text x="622" y="343">新的进展</text>
+<path class="line" d="M420 264H335V345H175V384"/><text x="174" y="333">重复或落后的阶段反馈</text>
+<rect x="40" y="384" width="270" height="64"/><text x="175" y="410">按需补充过程记录</text><text x="175" y="436">不回退、不重复触发</text>
+<rect x="425" y="384" width="270" height="64"/><text x="560" y="410">按转换条件更新命令</text><text x="560" y="436">记录本次确认依据</text>
+</svg>

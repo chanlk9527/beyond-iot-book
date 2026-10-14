@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="410" viewBox="0 0 720 410" role="img" aria-labelledby="title desc">
+<title id="title">设备消息的接入与分发</title>
+<desc id="desc">设备报文依次经过协议转换、上下文补充和内容校验。校验通过后按消息用途分发至状态与历史处理、事件处理或命令服务；不符合要求的消息进入异常处理。</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#222"/></marker></defs>
+<style>text{font-family:'Noto Sans CJK SC','Microsoft YaHei','PingFang SC',sans-serif;font-size:18px;fill:#222;text-anchor:middle}rect{fill:#fff;stroke:#222;stroke-width:2;rx:3}.arrow{fill:none;stroke:#222;stroke-width:2;marker-end:url(#arrow)}.line{fill:none;stroke:#222;stroke-width:2}</style>
+<rect width="720" height="410" style="stroke:none"/>
+<text x="120" y="29">设备报文</text><path class="arrow" d="M120 40V78"/>
+<rect x="30" y="80" width="180" height="68"/><text x="120" y="108">协议转换</text><text x="120" y="133">映射业务数据</text>
+<path class="arrow" d="M210 114H270"/>
+<rect x="270" y="80" width="180" height="68"/><text x="360" y="108">上下文补充</text><text x="360" y="133">身份、接收时间等</text>
+<path class="arrow" d="M450 114H510"/>
+<rect x="510" y="80" width="180" height="68"/><text x="600" y="108">内容校验</text><text x="600" y="133">模型与交互要求</text>
+<path class="arrow" d="M640 148V212"/><text x="674" y="185">不通过</text>
+<rect x="550" y="214" width="140" height="52"/><text x="620" y="246">异常处理</text>
+<path class="line" d="M555 148V184H360V280M120 280H600"/>
+<text x="454" y="174">通过</text><text x="252" y="246">按消息用途分发</text>
+<path class="arrow" d="M120 280V342M360 280V342M600 280V342"/>
+<text x="180" y="320">属性上报</text><text x="410" y="320">事件上报</text><text x="648" y="320">命令反馈</text>
+<rect x="30" y="344" width="180" height="50"/><text x="120" y="375">状态与历史处理</text>
+<rect x="270" y="344" width="180" height="50"/><text x="360" y="375">事件处理</text>
+<rect x="510" y="344" width="180" height="50"/><text x="600" y="375">命令服务</text>
+</svg>
