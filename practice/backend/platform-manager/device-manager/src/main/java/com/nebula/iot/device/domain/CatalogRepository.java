@@ -1,0 +1,30 @@
+package com.nebula.iot.device.domain;
+import com.nebula.iot.device.domain.CatalogRows.*;
+import java.util.List;
+public interface CatalogRepository {
+ ConnectionRow connection(String id);
+ DirectoryRow directory(String scope);
+ int insertDirectory(String scope,String tree);
+ int updateDirectory(String scope,String tree,long revision);
+ List<ProductRow> products(String scope,String query,String category,int limit,long offset);
+ long productCount(String scope,String query,String category);
+ ProductRow product(String scope,String id);
+ ProductRow lockProduct(String scope,String id);
+ void insertProduct(String id,String tenant,String scope,String code,String name,String description,String model,String configuration);
+ int updateProduct(String scope,String id,String name,String description,String model,String configuration,long revision);
+ int productStatus(String scope,String id,boolean enabled,long revision);
+ int deleteProduct(String scope,String id,long revision);
+ void deleteModels(String id);
+ int publish(String scope,String id,String version,long revision);
+ void insertModel(String id,String version,String model);
+ List<ModelRow> models(String id);
+ ModelRow model(String id,String version);
+ List<DeviceRow> devices(String scope,String query,String productId,int limit,long offset);
+ long deviceCount(String scope,String query,String productId);
+ DeviceRow device(String scope,String id);
+ void insertDevice(String id,String tenant,String scope,String productId,String code,String name,String version,String hash,String secret);
+ int updateDevice(String scope,String id,String name,String lifecycle,long revision);
+ int deleteDevice(String scope,String id,long revision);
+ int rotate(String scope,String id,String hash,String secret,long revision);
+ void audit(String id,String scope,String actor,String action,String resource);
+}

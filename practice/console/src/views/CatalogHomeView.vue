@@ -1,0 +1,1 @@
+<template><section class="panel tenant-context-loading"><el-skeleton :rows="4" animated aria-label="正在进入产品与设备" /></section></template>

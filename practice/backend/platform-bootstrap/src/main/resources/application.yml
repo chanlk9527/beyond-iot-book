@@ -1,0 +1,42 @@
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
+      - org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration
+  data:
+    redis:
+      url: ${REDIS_URL:}
+      timeout: ${REDIS_COMMAND_TIMEOUT_MS:2000}ms
+      connect-timeout: 3s
+  application:
+    name: nebula-iot-platform
+server:
+  address: ${SERVER_ADDRESS:127.0.0.1}
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  servlet:
+    session:
+      timeout: 30m
+      cookie:
+        http-only: true
+        same-site: lax
+        secure: ${SESSION_COOKIE_SECURE:false}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+
+nebula:
+  management:
+    enabled: false
+  redis:
+    enabled: ${REDIS_ENABLED:false}
+  mqtt:
+    enabled: ${MQTT_ENABLED:true}

@@ -1,0 +1,31 @@
+spring:
+  autoconfigure:
+    exclude: []
+  mvc:
+    problemdetails:
+      enabled: true
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://127.0.0.1:5432/nebula}
+    username: ${DATABASE_USERNAME:nebula}
+    password: ${DATABASE_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+  flyway:
+    locations:
+      - classpath:db/migration/identity
+      - classpath:db/migration/tenant
+      - classpath:db/migration/device
+    clean-disabled: true
+    baseline-on-migrate: false
+nebula:
+  management:
+    enabled: true
+  cache:
+    device:
+      local-maximum-size: ${DEVICE_CACHE_LOCAL_MAXIMUM_SIZE:10000}
+      local-ttl: ${DEVICE_CACHE_LOCAL_TTL:PT5M}
+      redis-ttl: ${DEVICE_CACHE_REDIS_TTL:PT30M}
+    model:
+      local-maximum-size: ${MODEL_CACHE_LOCAL_MAXIMUM_SIZE:5000}
+      local-ttl: ${MODEL_CACHE_LOCAL_TTL:PT10M}
+      redis-ttl: ${MODEL_CACHE_REDIS_TTL:PT1H}

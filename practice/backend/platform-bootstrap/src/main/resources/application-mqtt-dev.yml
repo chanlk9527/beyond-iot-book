@@ -1,0 +1,19 @@
+nebula:
+  mqtt:
+    enabled: true
+    development-mode: true
+    host: 127.0.0.1
+    port: ${MQTT_PORT:1883}
+    devices:
+      - tenant-id: tenant-a
+        device-id: warmer-1
+        product-id: baby-warmer
+        client-id: warmer-1
+        username: tenant-a/warmer-1
+        password: ${MQTT_DEV_PASSWORD}
+      - tenant-id: tenant-b
+        device-id: warmer-1
+        product-id: baby-warmer
+        client-id: tenant-b-warmer-1
+        username: tenant-b/warmer-1
+        password: ${MQTT_DEV_PASSWORD}

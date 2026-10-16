@@ -1,0 +1,119 @@
+# 产品与设备管理
+
+Spring MVC、MyBatis、PostgreSQL管理模块，随`management` profile启用。拥有产品、已发布物模型、设备注册和操作审计表。它提供持久化设备认证与接入目录；正常management启动默认启用MQTT。显式mqtt-dev仍使用独立开发目录。
+
+## 范围与权限
+
+产品设备接口从以下两个范围之一调用：
+
+- `/api/management/catalog/platform`：仅平台超管可用；读取全部租户及无租户产品设备，创建产品时归属为 NULL。
+- `/api/management/catalog/tenants/{tenantId}`：普通账号验证租户启用及有效成员；平台超管可直接访问。写操作使用资源实际归属。
+
+普通账号的租户读取需要对应 RBAC 功能权限及成员关系。写入还要求租户角色 OWNER 或 ADMIN，VIEWER 仅可读。无租户数据即使拥有product／device功能权限，普通账号仍无权访问。客户端传入的额外tenantId字段不会改变服务端路由确定的归属。
+
+| 权限点 | 操作 |
+| --- | --- |
+| product:read | 产品列表、详情和已发布版本查询 |
+| product:write | 创建产品、保存草稿与基本信息 |
+| product:publish | 发布模型版本、启停产品 |
+| device:read | 设备列表与详情 |
+| device:write | 登记设备及修改名称／生命周期 |
+| device:credential | 查询和轮换凭证；登记设备生成凭证时也必须具备此权限 |
+
+前端登记设备还需要product:read以选择已发布产品；角色配置应同时考虑页面读取和写入能力。平台超管自动拥有新增的注册功能权限，普通角色需显式配置。数据权限未新增，继续保留原有租户归属边界。
+
+## API
+
+下表路径相对上述范围前缀。写请求保留Session／CSRF校验。分页page从1开始，size默认20、最多100，query最多100字符。编码为1～64字符的字母、数字、点、下划线或连字符，首字符须为字母或数字，区分大小写并在同一范围唯一。产品与设备ID由服务端生成，编码、归属及设备产品绑定不能在编辑中更改。
+
+| 方法与路径 | 请求与结果 |
+| --- | --- |
+| GET `/products` | query、page、size；返回items／total／page／size |
+| POST `/products` | `{code,name,description}`；返回产品，初始空草稿、未发布、启用 |
+| GET `/products/{id}` | 产品详情、draft、latestVersion、revision |
+| PUT `/products/{id}/draft` | `{name,description,model,revision}`保存草稿及基本信息 |
+| POST `/products/{id}/publish` | `{revision,confirmEmpty?}`冻结已保存草稿，服务端自动分配 v1、v2…；空模型需 confirmEmpty=true |
+| PUT `/products/{id}/status` | `{enabled,revision}`启停产品 |
+| DELETE `/products/{id}` | revision 查询参数；停用且无设备引用时可删除 |
+| GET `/products/{id}/models` | 返回不可变 version、model、publishedAt 和 deviceCount（该版本绑定设备数，含停用／退役设备） |
+| GET `/devices` | query、productId（可选）、page、size；返回分页设备列表 |
+| POST `/devices` | `{productId,code,name,modelVersion}`；仅接受同范围启用产品的已发布版本，返回设备与当前凭证 |
+| GET `/devices/{id}` | 设备安全投影，不返回哈希；凭证通过凭证接口读取 |
+| GET `/devices/{id}/credential` | 按 `device:credential` 权限返回当前设备凭证 |
+| PUT `/devices/{id}` | `{name,lifecycle,revision}`修改设备名称或生命周期 |
+| DELETE `/devices/{id}` | revision 查询参数；删除设备登记，保留审计 |
+| POST `/devices/{id}/credential` | `{revision}`轮换凭证，返回新的设备投影和当前凭证 |
+
+名称1～100字符，description必填字符串、最多1000字符。新模型版本由服务端自动分配，不接收客户端指定的版本号。已有手写版本保持不变，标准 vN 数字标签的最大值加一作为下一个版本（例如已有 v9、v2，则生成 v10）；其他历史标签不参与递增。所有修改使用revision，过期或冲突返回409；范围内无对应资源返回404，越权403，模型／参数错误400。
+
+模型JSON结构为`{properties:{},events:{},operations:{}}`，复用core的PropertyDefinition／EventDefinition／OperationDefinition／ValueSchema。定义ID须匹配Map键，使用字母开头的字母、数字、下划线，最多64字符。支持BOOLEAN、INTEGER、DECIMAL、TEXT及核心既有范围／长度约束。每类最多100个定义，事件和操作各最多100个字段，序列化模型最多65536字符。
+
+```json
+{
+  "properties": {
+    "power": {"id":"power","schema":{"type":"BOOLEAN"},"access":"READ_WRITE"},
+    "heatingLevel": {"id":"heatingLevel","schema":{"type":"INTEGER","minimum":1,"maximum":100},"access":"READ_WRITE"}
+  },
+  "events": {},
+  "operations": {
+    "setHeatingLevel": {"id":"setHeatingLevel","inputs":{"heatingLevel":{"id":"heatingLevel","schema":{"type":"INTEGER","minimum":1,"maximum":100},"required":true}}}
+  }
+}
+```
+
+前端先保存草稿再发布，不自动发布未保存的编辑值。物模型页区分“有未保存修改”“已保存但尚未发布”“与最新发布版一致”，并提供直接发布入口；版本页展示属性／操作／事件的新增、修改和移除摘要。空模型需要明确确认，后端也执行校验；草稿与最新版本内容一致时拒绝重复发布。自动编号、草稿快照、latestVersion、revision 和审计在同一产品行锁和事务内更新，并发请求使用旧 revision 返回409，不会额外消耗版本号。发布v2不改变v1，也不会自动升级已经绑定v1的设备。设备能力页分别展示当前绑定和产品最新发布版本；草稿与绑定版本不同不等于草稿未发布。设备模型迁移和固件 OTA 本次不实现，继续保持原绑定。数据库外键同时确保设备与产品范围一致，以及设备绑定确实存在的模型版本。停用产品会阻止发布、登记和设备激活，保留已有模型与设备记录。
+
+## 二级产品目录
+
+目录为平台共享数据，通过 `/api/management/catalog/shared/categories` 读取和保存。读取要求 `product:read`，维护要求平台超管及 `product:write`，保存使用 revision 防止覆盖并发修改。读取只返回数据库记录，不从代码生成兜底目录。
+
+品类 ID 每段为 3～4 个小写英文字母，二级 ID 为父 ID 加连字符和英文码，如 `feed-warm`。ID 创建后固定，中文名称可修改；产品的 `configuration.category` 保存二级 ID。删除品类前检查所有租户及无租户产品的引用，改名不改变 ID 或产品关联。
+
+GET `/products` 的 category 参数为空时返回全部，一级 ID 匹配其下全部二级品类，二级 ID 精确匹配。品类、名称及范围筛选均在分页前执行，total 使用同一条件。
+
+## 产品配置
+
+参考 JetLinks 的产品档案、设备类型、入网方式、传输协议和消息协议分层。产品的 configuration 保存档案配置，创建与保存草稿均可携带 configuration；旧客户端省略该字段时，创建使用默认值，更新保留已有配置。产品读取及列表返回配置，修改继续使用 product:write、租户角色、revision 和同事务审计。
+
+配置包括 category、manufacturer、modelNumber、deviceType（DIRECT/GATEWAY/CHILD）、networkWay（ETHERNET/WIFI/CELLULAR/NB_IOT/LORA/OTHER）、transportProtocol（MQTT）、messageProtocol（nebula-mqtt-v1）、dataFormat（JSON）、firmwareVersion、supportUrl 与 installationNotes。普通文本最多100字符，文档地址及维护说明最多1000字符，配置序列化后最多8192字符；文档地址仅接受 HTTP(S)。
+
+这些配置属于产品档案和接入规划，不随物模型版本冻结。网关/子设备类型不启用拓扑、代理认证或消息转发；入网方式不配置网络监听。正常MQTT服务已使用登记凭证认证，设备需为ACTIVE且产品与所属租户启用。产品级存储策略、保留周期及协议插件选择尚未实现，页面明确显示能力边界。
+
+参考：https://github.com/jetlinks/jetlinks-community/blob/master/jetlinks-manager/device-manager/src/main/java/org/jetlinks/community/device/entity/DeviceProductEntity.java
+
+## 凭证与生命周期
+
+每台设备生成独立的16位小写字母身份，字符集排除容易混淆的 `i`、`l`、`o`；ClientId与用户名均使用该设备ID，MQTT密码使用后台生成的当前密钥。正常启动的MQTT 5服务使用数据库BCrypt哈希校验，拒绝伪造ClientId、跨租户身份和失效凭证。设备登记后默认启用（ACTIVE），可立即使用凭证接入；DISABLED／RETIRED不允许连接；产品或所属租户停用也拒绝接入。数据库同时保存BCrypt哈希和当前凭证明文，设备可通过凭证接口长期查看；登记和轮换响应设置Cache-Control:no-store。当前 practice 阶段暂不处理凭证长期暴露问题，后续再收紧存储和展示策略。
+
+轮换替换旧哈希和明文并递增credentialVersion与revision，事务提交后断开设备当前MQTT会话，旧密钥不能重连；停用或退役设备也会断开连接。网络失败不自动重试；设备详情可重新读取当前凭证。本版未提供凭证导出、批量导入或自动迁移归属。
+
+生命周期为 ACTIVE、DISABLED、RETIRED。登记成功即启用，启用只表示允许接入，不代表在线；退役后不能重新启用或轮换凭证。V17 将历史 REGISTERED 设备转为 ACTIVE 并递增 revision，保留设备身份、凭证和模型，停用与退役设备保持原状态。产品和模型绑定保持不变。修改与审计同事务，产品级锁与revision保护发布、登记、状态和凭证更新的并发一致性。
+
+## 验证
+
+`CatalogApiTest` 通过 Spring 安全链、Flyway、MyBatis 和 H2 PostgreSQL 兼容模式验证归属、授权、模型版本、凭证、生命周期和并发冲突。H2 测试不替代真实 PostgreSQL 验证。
+
+管理API不表示已完成设备通信。正式MQTT认证／注册解析、可靠上行存储、连接状态、设备控制、OTA 和批量导入仍待后续阶段实现；现有协议与接入组件不由本模块自动启用。
+## 设备影子（Redis）
+
+设备详情的“设备状态”页签展示 reported（设备最新上报）、desired（平台期望）和 delta（尚未匹配的目标）。数据保存在 Redis 的 `nebula:shadow:v1:<租户编码>:<设备编码>` 键中，编码使用 Base64URL 避免分隔符碰撞；无租户设备使用 platform 范围。影子不设置 TTL，不以进程内缓存或 PostgreSQL 兜底；Redis 的持久化和备份策略决定这份状态的恢复能力。
+
+相对本模块范围前缀提供：
+
+- GET `/devices/{id}/shadow`：要求 device:read 和资源范围权限。未有数据时返回 version=0 的空影子。
+- PUT `/devices/{id}/shadow/desired`：要求 device:read、device:write 和范围写权限，请求为 `{"version":0,"desired":{"power":true,"heatingLevel":70}}`。按属性合并，null 删除对应期望，省略的属性保留。只能设置绑定模型的 READ_WRITE 属性，并校验类型和数值／长度约束。停用设备、退役设备或停用产品不接受新目标。
+
+version 是独立的影子版本，与设备登记 revision 无关；desired 和 reported 的有效更新均增加版本。Redis Lua 脚本执行原子比较并写入，过期管理写入返回409，需刷新后重新编辑。请求最多100个属性、64 KiB，完整影子上限512 KiB。Redis 未启用或连接失败返回503，不伪装成空影子或保存成功。
+
+上报从已认证消息进入内部总线后由影子订阅者消费，仅接受 PropertyReport；核对登记范围、ACTIVE 生命周期、启用产品和固定模型。按属性合并并保存设备观测时间、平台接收时间和消息 ID，旧观测不覆盖新值；相同观测时间按消息 ID 排序。设备时间超过平台接收时间5分钟的报告拒绝，最近128个已合并消息 ID 用于重复抑制。Redis 写入失败会使该次消息处理失败。管理 API 不提供伪造 reported 的入口。
+
+期望与上报值相等时从 delta 消失，但 desired 仍保留。delta 只表达值差异，不是命令受理或执行回执；本阶段不自动下发 desired，也不把影子更新当成在线证明。现有 mqtt-dev 清单没有对应管理登记时会跳过影子；正常management模式使用数据库登记设备目录，属性上报通过现有消息总线进入影子，Redis失败会拒绝此次处理。
+# 设备/模型三级缓存
+
+缓存内核位于 `infrastructure.cache.ThreeLevelCache<K,V>`，不依赖设备领域。设备连接通过 `DeviceConnectionCache` 适配，物模型通过 `ThingModelCache` 适配；后续权限、租户和产品配置可以复用同一内核，只需提供缓存 key、值类型和数据库加载函数。
+
+接入鉴权和物模型校验使用同一份只读快照缓存：请求先查进程内 Caffeine（L1），未命中再查 Redis（L2），最后回源 `device_registration + device_model_version`（L3）。数据库始终是权威数据源；Redis 未启用、超时、反序列化失败都会自动回源，不影响设备接入。
+
+缓存值只包含设备资格、BCrypt 密码哈希和已发布模型 JSON，不包含设备密钥明文、影子状态或控制命令。L1 默认最多 10000 条、空闲 5 分钟；L2 默认 30 分钟，可通过 `DEVICE_CACHE_LOCAL_MAXIMUM_SIZE`、`DEVICE_CACHE_LOCAL_TTL` 和 `DEVICE_CACHE_REDIS_TTL` 调整。Redis key 使用版本前缀和全局 generation，产品停用等全量失效无需执行危险的 `KEYS` 扫描。
+
+设备凭证轮换、设备生命周期变更、删除会在事务提交后精确失效；产品启停会递增共享 generation。这样既避免旧资格继续生效，也避免写事务回滚时提前清除仍然有效的快照。

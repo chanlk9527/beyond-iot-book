@@ -1,0 +1,7 @@
+**/target/
+.m2/
+
+# Local connection credentials
+/.env
+/.env.local
+/.env.*.local
