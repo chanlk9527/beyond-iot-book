@@ -68,7 +68,7 @@ public final class ThreeLevelCache<K, V> {
             try {
                 var value = redis.opsForValue().get(redisKey(key, generation));
                 if (value != null) {
-                    var decoded = json.readValue(value, valueType);
+                    @SuppressWarnings("unchecked") V decoded = (V) json.readValue(value, valueType);
                     redisHits.increment();
                     return new Entry<>(decoded, generation);
                 }

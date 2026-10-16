@@ -68,8 +68,9 @@ public final class DeviceShadowService {
             throw problem(HttpStatus.CONFLICT, "Device registration or model is not active");
         var product = data.product(row.scopeKey(), row.productId());
         if (product == null || !product.enabled()) throw problem(HttpStatus.CONFLICT, "Device product is disabled");
-        var spec = models.get(row.productId(), row.modelVersion());
-        if (spec == null) throw problem(HttpStatus.CONFLICT, "Device model is unavailable");
+        var model = models.get(row.productId(), row.modelVersion());
+        if (model == null) throw problem(HttpStatus.CONFLICT, "Device model is unavailable");
+        var spec = model.model();
         var values = new HashMap<String, JsonNode>();
         try {
             if (report.properties().isEmpty() || report.properties().size() > 100) throw new IllegalArgumentException();

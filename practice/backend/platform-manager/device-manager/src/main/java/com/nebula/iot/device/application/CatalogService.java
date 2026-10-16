@@ -23,10 +23,11 @@ public class CatalogService {
  private final ObjectMapper json;
  private final PasswordEncoder encoder;
  private final org.springframework.context.ApplicationEventPublisher events;
+ private final ThingModelCache models;
  private final SecureRandom random=new SecureRandom();
  private static final char[] DEVICE_ID_ALPHABET="abcdefghjkmnpqrstuvwxyz".toCharArray();
  private static final int DEVICE_ID_LENGTH=16;
- public CatalogService(CatalogRepository data,AccountDirectory accounts,TenantAccess tenants,ObjectMapper json,PasswordEncoder encoder,org.springframework.context.ApplicationEventPublisher events){this.data=data;this.accounts=accounts;this.tenants=tenants;this.json=json;this.encoder=encoder;this.events=events;}
+ public CatalogService(CatalogRepository data,AccountDirectory accounts,TenantAccess tenants,ObjectMapper json,PasswordEncoder encoder,org.springframework.context.ApplicationEventPublisher events,ThingModelCache models){this.data=data;this.accounts=accounts;this.tenants=tenants;this.json=json;this.encoder=encoder;this.events=events;this.models=models;}
  private String access(String actor,String tenant,String permission,boolean write){
   accounts.requirePermission(actor,permission);
   if(tenant==null){accounts.requirePlatformAdmin(actor);return "platform";}
@@ -118,14 +119,14 @@ public class CatalogService {
  public Device device(String actor,String tenant,String id){return deviceView(deviceRow(readScope(actor,tenant,"device:read"),id));}
  public DeviceDetail deviceDetail(String actor,String tenant,String id){
   String scope=readScope(actor,tenant,"device:read");
-  var row=deviceRow(scope,id); var product=productRow(scope,row.productId()); var model=data.model(row.productId(),row.modelVersion());
+  var row=deviceRow(scope,id); var product=productRow(scope,row.productId()); var model=models.get(row.productId(),row.modelVersion());
   if(model==null) missing();
-  return new DeviceDetail(deviceView(row),productView(product),new ModelVersion(model.version(),decode(model.modelJson()),model.publishedAt(),model.deviceCount()));
+  return new DeviceDetail(deviceView(row),productView(product),model);
  }
  public DeviceRuntimeSnapshot runtimeSnapshot(String actor,String tenant,String id){
-  String scope=readScope(actor,tenant,"device:read"); var row=deviceRow(scope,id); var model=data.model(row.productId(),row.modelVersion());
+  String scope=readScope(actor,tenant,"device:read"); var row=deviceRow(scope,id); var model=models.get(row.productId(),row.modelVersion());
   if(model==null) missing();
-  var spec=decode(model.modelJson());
+  var spec=model.model();
   List<PropertySnapshot> properties=new ArrayList<>();
   spec.properties().values().forEach(p->properties.add(new PropertySnapshot(p.id(),p.schema().type().name(),p.access().name(),"暂无上报","",false)));
   List<EventSnapshot> events=new ArrayList<>();
