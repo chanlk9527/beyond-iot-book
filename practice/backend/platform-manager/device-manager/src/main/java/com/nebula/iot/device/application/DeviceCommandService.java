@@ -25,6 +25,7 @@ public final class DeviceCommandService {
     private final TenantAccess tenants;
     private final Supplier<DeviceDownlinkSender> sender;
     private final Clock clock;
+    private final DurableCommands durable;
     private final Map<String, Entry> entries = new ConcurrentHashMap<>();
     private static final Duration RETENTION = Duration.ofMinutes(10);
     private static final int MAX_ENTRIES = 1000;
@@ -45,6 +46,11 @@ public final class DeviceCommandService {
 
     public DeviceCommandService(CatalogService catalog, AccountDirectory accounts, TenantAccess tenants,
             Supplier<DeviceDownlinkSender> sender, Clock clock) {
+        this(catalog,accounts,tenants,sender,clock,null);
+    }
+    public DeviceCommandService(CatalogService catalog,AccountDirectory accounts,TenantAccess tenants,
+            Supplier<DeviceDownlinkSender> sender,Clock clock,DurableCommands durable) {
+        this.durable=durable;
         this.catalog = catalog; this.accounts = accounts; this.tenants = tenants;
         this.sender = sender; this.clock = clock;
     }
@@ -61,7 +67,7 @@ public final class DeviceCommandService {
                 property.schema().validate(value);
             });
         } catch (IllegalArgumentException e) { throw problem(HttpStatus.BAD_REQUEST, e.getMessage()); }
-        return dispatch(detail, new DownlinkBody.PropertyWrite(values), null, "PROPERTY_WRITE");
+        return dispatch(actor,detail, new DownlinkBody.PropertyWrite(values), null, "PROPERTY_WRITE");
     }
 
     public DownlinkStatus invoke(String actor, String tenant, String device, String operationId, Map<String, JsonNode> inputs) {
@@ -73,7 +79,7 @@ public final class DeviceCommandService {
         try { operation.validateInputs(values); }
         catch (IllegalArgumentException e) { throw problem(HttpStatus.BAD_REQUEST, e.getMessage()); }
         var commandId = UUID.randomUUID().toString();
-        return dispatch(detail, new DownlinkBody.OperationInvoke(new CommandId(commandId), operationId, values), commandId, "OPERATION");
+        return dispatch(actor,detail, new DownlinkBody.OperationInvoke(new CommandId(commandId), operationId, values), commandId, "OPERATION");
     }
 
     private DeviceDetail writable(String actor, String tenant, String device) {
@@ -88,11 +94,12 @@ public final class DeviceCommandService {
         return detail;
     }
 
-    private DownlinkStatus dispatch(DeviceDetail detail, DownlinkBody body, String commandId, String kind) {
+    private DownlinkStatus dispatch(String actor,DeviceDetail detail, DownlinkBody body, String commandId, String kind) {
         var now = clock.instant();
         var key = new DeviceKey(new TenantId(detail.device().tenantId() == null ? "platform" : detail.device().tenantId()), new DeviceId(detail.device().id()));
         var request = new DeviceDownlink(new MessageId(UUID.randomUUID().toString()), key, detail.device().modelVersion(),
                 now, now.plusSeconds(30), Optional.empty(), Optional.empty(), body);
+        if(durable!=null)return durable.enqueue(request,commandId,kind,actor);
         var entry = new Entry(request, commandId, kind);
         synchronized (entries) {
             entries.values().removeIf(value -> !now.isBefore(value.request.createdAt().plus(RETENTION)));
@@ -117,6 +124,12 @@ public final class DeviceCommandService {
 
     public DownlinkStatus get(String actor, String tenant, String device, String messageId) {
         var detail = catalog.deviceDetail(actor, tenant, device);
+        if(durable!=null) {
+            String scope=detail.device().tenantId()==null?"platform":detail.device().tenantId();
+            var status=durable.status(new DeviceKey(new TenantId(scope),new DeviceId(device)),messageId);
+            if(status==null)throw problem(HttpStatus.NOT_FOUND,"下发记录不存在");
+            return status;
+        }
         var entry = entries.get(messageId);
         String tenantId = detail.device().tenantId() == null ? "platform" : detail.device().tenantId();
         if (entry == null || !entry.request.device().deviceId().value().equals(device)
@@ -137,6 +150,7 @@ public final class DeviceCommandService {
 
     /** Only authenticated gateway ingress may call this method. Match device, model, type and both IDs. */
     public void accept(DeviceMessage message) {
+        if(durable!=null){durable.accept(message);return;}
         if (message.origin() != MessageOrigin.DEVICE || message.replyTo().isEmpty() || message.result().isEmpty()) return;
         var entry = entries.get(message.replyTo().get().value());
         if (entry == null || !entry.request.device().equals(message.device()) || !entry.request.modelVersion().equals(message.modelVersion())) return;

@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
+@org.springframework.boot.autoconfigure.condition.ConditionalOnExpression("${nebula.runtime.management:true}")
 @RestController
 @RequestMapping({"/api/management/catalog/platform","/api/management/catalog/tenants/{tenantId}"})
 @ConditionalOnProperty(name="nebula.management.enabled",havingValue="true")

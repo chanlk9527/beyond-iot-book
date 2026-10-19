@@ -6,6 +6,7 @@ import java.security.Principal;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.*;
 
+@org.springframework.boot.autoconfigure.condition.ConditionalOnExpression("${nebula.runtime.management:true}")
 @RestController
 @RequestMapping("/api/management/catalog/shared/categories")
 @ConditionalOnProperty(name="nebula.management.enabled",havingValue="true")

@@ -11,6 +11,7 @@ vi.mock('element-plus',()=>({ElMessage:{success:vi.fn()},ElMessageBox:{confirm:v
 vi.mock('../api/catalog',async original=>({...await original<typeof import('../api/catalog')>(),catalogApi:{product:vi.fn(),models:vi.fn(),save:vi.fn(),publish:vi.fn()}}))
 vi.mock('../components/CatalogNavigation.vue',()=>({default:defineComponent(()=>()=>null)}))
 vi.mock('../components/ProductConfigurationForm.vue',()=>({default:defineComponent(()=>()=>null)}))
+vi.mock('../components/ProductDataPolicy.vue',()=>({default:defineComponent(()=>()=>null)}))
 vi.mock('./DevicesView.vue',()=>({default:defineComponent(()=>()=>null)}))
 vi.mock('../components/ThingModelEditor.vue',()=>({default:defineComponent({props:['modelValue','disabled'],emits:['update:modelValue'],setup:(p,ctx)=>()=>h('textarea',{'data-model':true,value:p.modelValue,disabled:p.disabled,onInput:(e:Event)=>ctx.emit('update:modelValue',(e.target as HTMLTextAreaElement).value)})})}))
 const empty=():ModelSpec=>({properties:{},events:{},operations:{}})

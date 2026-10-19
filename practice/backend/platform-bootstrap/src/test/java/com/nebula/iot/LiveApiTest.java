@@ -3,8 +3,12 @@ package com.nebula.iot;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nebula.iot.media.api.MediaProvider;
 import com.nebula.iot.media.api.MediaProvider.*;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.time.Instant;
 import java.util.*;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -20,6 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties={"spring.datasource.url=jdbc:h2:mem:live;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
     "spring.datasource.driver-class-name=org.h2.Driver","DATABASE_PASSWORD=test","nebula.mqtt.enabled=false",
+    "nebula.app.video.enabled=true","nebula.app.video.app-id=home-app","nebula.app.video.signing-secret=test-secret",
     "nebula.video.channels[0].scope=ta","nebula.video.channels[0].device-id=d1",
     "nebula.video.channels[0].channel-id=main","nebula.video.channels[0].resource=private-channel"})
 @ActiveProfiles("management") @AutoConfigureMockMvc @Import(LiveApiTest.Media.class)
@@ -42,6 +47,7 @@ class LiveApiTest {
     @Autowired com.nebula.iot.video.api.LiveAccessPolicy policy;
     @Autowired ObjectMapper json;
     static final String PATH = "/api/management/video/sessions";
+    static final String APP_PATH = "/api/app/video/sessions";
     static final String INPUT = "{\"tenantId\":\"ta\",\"deviceId\":\"d1\",\"channelId\":\"main\"}";
     @BeforeEach void seed() {
         for (String table : List.of("device_management_audit","device_registration","device_model_version","device_product",
@@ -65,6 +71,26 @@ class LiveApiTest {
         assertFalse(body.contains("private-channel")); assertFalse(body.contains("Signature"));
         return json.readTree(body).path("sessionId").asText();
     }
+    @Test void appServerClaimCanCreateSessionWithoutManagementSession() throws Exception {
+        String timestamp = Long.toString(Instant.now().toEpochMilli());
+        String requestId = UUID.randomUUID().toString();
+        mvc.perform(post(APP_PATH)
+                .header("X-Nebula-App-Id", "home-app")
+                .header("X-Nebula-App-Request-Id", requestId)
+                .header("X-Nebula-App-Subject", "app-user-1")
+                .header("X-Nebula-App-Tenant", "ta")
+                .header("X-Nebula-App-Device", "d1")
+                .header("X-Nebula-App-Channel", "main")
+                .header("X-Nebula-App-Timestamp", timestamp)
+                .header("X-Nebula-App-Signature", signApp("app-user-1", "ta", "d1", "main", timestamp, requestId)))
+                .andExpect(status().isCreated()).andExpect(header().string("Cache-Control", "no-store"));
+    }
+    private static String signApp(String subject, String tenant, String device, String channel, String timestamp, String requestId) throws Exception {
+        var mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec("test-secret".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal(
+                ("home-app\n"+subject+"\n"+tenant+"\n"+device+"\n"+channel+"\n"+timestamp+"\n"+requestId).getBytes(StandardCharsets.UTF_8)));
+    }
     @Test void requiresLoginCsrfPermissionAndActualTenantMembership() throws Exception {
         mvc.perform(post(PATH).with(csrf()).contentType("application/json").content(INPUT)).andExpect(status().isUnauthorized());
         mvc.perform(post(PATH).with(user("alice")).contentType("application/json").content(INPUT)).andExpect(status().isForbidden());
@@ -84,9 +110,10 @@ class LiveApiTest {
         mvc.perform(get(PATH+"/"+id+"/signals").with(user("alice"))).andExpect(status().isNotFound());
         mvc.perform(delete(PATH+"/"+id).with(user("alice")).with(csrf())).andExpect(status().isNoContent());
     }
-    @Test void appIdentityIsDeniedByDefaultPolicy() {
-        assertThrows(org.springframework.security.access.AccessDeniedException.class, () -> policy.requireWatch(
-                new com.nebula.iot.video.api.LiveAccessPolicy.Identity(com.nebula.iot.video.api.LiveAccessPolicy.Audience.APP,"alice"),"ta","d1","main"));
+    @Test void appIdentityUsesAuthoritativeDeviceState() {
+        var target = policy.requireWatch(new com.nebula.iot.video.api.LiveAccessPolicy.Identity(
+                com.nebula.iot.video.api.LiveAccessPolicy.Audience.APP,"alice"),"ta","d1","main");
+        assertEquals(new com.nebula.iot.video.api.LiveAccessPolicy.Target("ta","d1","main"), target);
     }
     @Test void rejectsInactiveDeviceAndProduct() throws Exception {
         jdbc.update("UPDATE device_registration SET lifecycle='DISABLED'");

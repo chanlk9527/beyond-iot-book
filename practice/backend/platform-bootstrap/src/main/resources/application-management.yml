@@ -18,6 +18,15 @@ spring:
     clean-disabled: true
     baseline-on-migrate: false
 nebula:
+  history:
+    provider: ${HISTORY_PROVIDER:disabled}
+    maximum-retention-days: ${HISTORY_MAXIMUM_RETENTION_DAYS:3650}
+    cleanup-interval-ms: ${HISTORY_CLEANUP_INTERVAL_MS:60000}
+    tdengine:
+      url: ${TDENGINE_URL:jdbc:TAOS-WS://127.0.0.1:6041/}
+      username: ${TDENGINE_USERNAME:root}
+      password: ${TDENGINE_PASSWORD:}
+      database: ${TDENGINE_DATABASE:nebula_history}
   management:
     enabled: true
   cache:

@@ -8,7 +8,7 @@
 brew install openjdk@21 maven node@24
 ```
 
-`manage.sh` 自动查找 Apple Silicon 和 Intel Homebrew 的 JDK 21、Node.js 24，无需修改全局 Java 设置。先复制 `backend/.env.example` 为 `backend/.env.local`，填写 PostgreSQL 连接信息；配置按字面读取，不执行其中的 shell 内容。需要创建首个管理账号时，填写示例中的初始账号、密码和平台管理员开关。
+`manage.sh` 自动查找 Apple Silicon 和 Intel Homebrew 的 JDK 21、Node.js 24，无需修改全局 Java 设置。先复制 `backend/.env.example` 为 `backend/.env.local`，填写 PostgreSQL 或 MySQL 连接信息；配置按字面读取，不执行其中的 shell 内容。需要创建首个管理账号时，填写示例中的初始账号、密码和平台管理员开关。
 
 从仓库根目录执行：
 
@@ -83,3 +83,7 @@ brew install openjdk@21 maven node@24
 本机安全工具可能让不同进程看到不同文件视图。若构建出现既有模块类不可见，或 esbuild 报无法读取已存在的 `vite.config.ts`，应检查运行进程的透明解密能力和访问权限。修改控制台代码页无法解决此问题。
 
 Redis 配置也由同一 `.env.local` 加载：取消示例中 `REDIS_ENABLED` 和 `REDIS_URL` 的注释，填写 Upstash 的 `rediss://` Redis TCP 连接地址。HTTPS REST 地址与 REST token 不用于此连接。以后自建 Redis 只替换 URL；当前仅准备连接与健康检查，业务缓存和 Session 尚未迁移到 Redis。Redis 关闭时不需要此服务。
+
+## 三个独立服务
+
+已提供 management-service、access-service、worker-service 三个可执行 JAR，复用现有业务装配并固定运行角色。构建、启动脚本、端口、共享依赖及跨进程验收见 [独立服务说明](backend/platform-services/README.md)。原组合启动方式保留。部署边界已拆分，领域数据适配暂时共享；完整命令、事务与登录集群能力仍按专项验收。

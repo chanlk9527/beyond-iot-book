@@ -17,7 +17,7 @@ RUN = ROOT / '.run'
 JAR = ROOT / 'backend/platform-bootstrap/target/platform-bootstrap-0.1.0-SNAPSHOT.jar'
 VITE = ROOT / 'console/node_modules/vite/bin/vite.js'
 PORTS = {'backend': 8080, 'frontend': 5173}
-ALLOWED = set('DATABASE_URL DATABASE_USERNAME DATABASE_PASSWORD REDIS_ENABLED REDIS_URL REDIS_COMMAND_TIMEOUT_MS MQTT_ENABLED MQTT_PORT NEBULA_MANAGEMENT_INITIAL_ACCOUNT_USERNAME NEBULA_MANAGEMENT_INITIAL_ACCOUNT_PASSWORD NEBULA_MANAGEMENT_INITIAL_ACCOUNT_PLATFORM_ADMIN'.split())
+ALLOWED = set('DATABASE_URL DATABASE_USERNAME DATABASE_PASSWORD REDIS_ENABLED REDIS_URL REDIS_COMMAND_TIMEOUT_MS MQTT_ENABLED MQTT_PORT NEBULA_MANAGEMENT_INITIAL_ACCOUNT_USERNAME NEBULA_MANAGEMENT_INITIAL_ACCOUNT_PASSWORD NEBULA_MANAGEMENT_INITIAL_ACCOUNT_PLATFORM_ADMIN HISTORY_PROVIDER HISTORY_MAXIMUM_RETENTION_DAYS HISTORY_CLEANUP_INTERVAL_MS TDENGINE_URL TDENGINE_USERNAME TDENGINE_PASSWORD TDENGINE_DATABASE'.split())
 
 
 def identity(pid):
@@ -79,8 +79,8 @@ def config(path):
     for key in ('DATABASE_URL', 'DATABASE_USERNAME', 'DATABASE_PASSWORD'):
         if key not in settings:
             raise ValueError('Missing ' + key)
-    if not settings['DATABASE_URL'].startswith('jdbc:postgresql://'):
-        raise ValueError('DATABASE_URL must be a PostgreSQL JDBC URL.')
+    if not settings['DATABASE_URL'].startswith(('jdbc:postgresql://', 'jdbc:mysql://')):
+        raise ValueError('DATABASE_URL must be a PostgreSQL or MySQL JDBC URL.')
     for key in ('REDIS_ENABLED', 'MQTT_ENABLED', 'NEBULA_MANAGEMENT_INITIAL_ACCOUNT_PLATFORM_ADMIN'):
         if key in settings and settings[key] not in ('true', 'false'):
             raise ValueError(key + ' must be true or false.')

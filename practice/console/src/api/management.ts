@@ -49,6 +49,7 @@ export async function request<T>(path: string, options: RequestInit = {}, notify
       403: '没有访问权限，或安全凭证已过期。请刷新后重试。',
       404: '请求的资源不存在。',
       429: '操作过于频繁，请稍后重试。',
+      422: '当前存储方案不支持所选记录方式、保留周期或聚合策略，请检查数据策略设置。',
     }
     throw new ApiError(response.status, messages[response.status] || '服务暂时不可用，请稍后重试。')
   }

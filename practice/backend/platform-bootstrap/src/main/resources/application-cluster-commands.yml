@@ -1,0 +1,7 @@
+# Explicit durable command data plane. Also enable management,cluster and configure Kafka.
+nebula:
+  cluster:
+    commands:
+      enabled: true
+  eventbus:
+    mode: kafka

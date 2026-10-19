@@ -11,6 +11,7 @@ import org.springframework.web.socket.config.annotation.*;
 import org.springframework.web.socket.server.HandshakeInterceptor;
 import org.springframework.web.util.UriComponentsBuilder;
 
+@org.springframework.boot.autoconfigure.condition.ConditionalOnExpression("${nebula.runtime.management:true}")
 @Configuration(proxyBeanMethods = false)
 @EnableWebSocket
 @ConditionalOnProperty(name = "nebula.management.enabled", havingValue = "true")

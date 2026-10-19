@@ -1,9 +1,10 @@
 # Message Component
 
-`EventBus` 是平台内部业务事件的发布／订阅边界。设备消息通过协议解码、身份绑定和物模型校验后，由启动层映射为 `EventMessage`，再由状态、规则、告警、审计和连接器消费者订阅。它不替代 MQTT 设备接入、下行命令投递或持久化工作队列。
+平台内部业务事件的发布／订阅边界，提供 `LocalEventBus` 与 `KafkaEventBus`。设备消息经协议解码、身份绑定和物模型校验后映射为 `EventMessage`。
 
-`EventMessage` 是跨本地和未来集群实现共用的不可变信封，包含事件 ID、主题、发生／接收时间、租户、设备、模型版本、原始消息 ID、来源、扩展头和业务载荷。当前设备主题约定为 `device/{deviceId}/{category}`。
+- Local：同 JVM 按主题匹配、并发回调，默认等待回调结果；没有持久化。
+- Kafka：共享事件 topic、租户与设备键分区；具名服务消费组、节点广播、业务主题过滤、明确 JSON 类型、发布确认、消费位点、重试及失败 topic。
+- `SubscriptionSpec` 支持单设备、通配符和多主题。App 订阅仍在实时网关内管理，不创建用户级 Kafka topic 或 group。
+- `PublishResult.confirmation()` 明确区分 `LOCAL_COMPLETED` 与 `BROKER_ACCEPTED`，后者不表示业务完成，订阅数量以 `-1` 表示未知。
 
-`LocalEventBus` 当前只在同一 JVM 内分发：匹配订阅者在共享执行器上并行运行，按优先级启动，发布等待全部 `CompletionStage` 完成；默认单个订阅者超时 30 秒，任一订阅者失败会使本次发布失败，但不会阻止其他订阅者被调用。订阅通过 `Subscription.close()` 取消。没有持久化、重放、跨进程投递、自动重试或跨主题顺序保证。
-
-`EventBus.supportsCluster()` 为以后接入跨机器实现保留能力探测口子；跨机器实现仍需定义序列化、投递确认、幂等、权限和故障恢复契约。
+完整配置、调用示例、交付语义和当前边界见 [Kafka EventBus](../../EVENTBUS.md)。EventBus 传输不替代 Outbox、业务幂等和跨节点设备会话路由。

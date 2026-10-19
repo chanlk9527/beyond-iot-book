@@ -2,6 +2,14 @@
 
 `video-manager` 管理观看授权、直播会话与统一信令；`media-component` 提供媒体端口和 AWS KVS WebRTC 适配。业务代码只依赖 `MediaProvider`，更换自建 WebRTC 服务时实现同一端口并装配 Bean。当前支持管理端观看实时音视频，不提供对讲、App 登录／绑定、设备推流凭证下发、录像、回放或转码。
 
+## C 端 App 观看
+
+启用 `nebula.app.video.enabled=true` 后，App Server 可调用 `/api/app/video/sessions` 创建观看会话，并继续调用同一路径下的 `signals` 和关闭接口。App Server 必须先完成 App 登录、设备绑定和通道授权，再使用平台与 App Server 之间的共享密钥生成短时 HMAC 绑定声明。平台只信任签名声明中的用户、租户、设备和通道，不接受 App 直接提交的未签名授权字段；平台仍会复核设备与产品为 ACTIVE／启用状态。
+
+签名请求头为 `X-Nebula-App-Id`、`X-Nebula-App-Subject`、`X-Nebula-App-Tenant`、`X-Nebula-App-Device`、`X-Nebula-App-Channel`、`X-Nebula-App-Timestamp`、`X-Nebula-App-Request-Id` 和 `X-Nebula-App-Signature`。签名内容是这些字段按 appId、subject、tenant、device、channel、timestamp、requestId 顺序以换行连接，算法为 HMAC-SHA256，结果使用无填充 Base64URL；默认时间偏差窗口为 60 秒。同一 requestId 在有效时间窗口内只能使用一次。应用 ID 通过 `nebula.app.video.app-id` 注入，密钥通过 `nebula.app.video.signing-secret` 注入，不能提交到仓库。创建、信令轮询和关闭请求都必须重新签名并携带原始绑定目标，平台会核对该目标与会话一致。
+
+该接口只负责观看信令，不通过 MQTT 下发开始／停止直播指令。设备侧仍需作为 KVS MASTER 持续推流；如果业务要求按观看会话动态启停设备推流，应另行增加受信设备控制和对应物模型操作。
+
 ## 授权
 
 管理接口沿用平台 Session 与 CSRF。创建会话以及每次收发信令都校验：

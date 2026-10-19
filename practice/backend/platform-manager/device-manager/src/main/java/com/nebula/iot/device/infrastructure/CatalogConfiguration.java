@@ -32,12 +32,15 @@ public class CatalogConfiguration {
  @Bean com.nebula.iot.device.api.DeviceConnectionDirectory registeredDeviceDirectory(CatalogMapper data,PasswordEncoder encoder,ObjectMapper json,com.nebula.iot.device.application.DeviceConnectionCache cache){return new com.nebula.iot.device.application.RegisteredDeviceDirectory(data,encoder,json,cache);}
  @Bean CatalogService catalogService(CatalogMapper data,AccountDirectory accounts,TenantAccess tenants,ObjectMapper json,PasswordEncoder encoder,org.springframework.context.ApplicationEventPublisher events,com.nebula.iot.device.application.ThingModelCache models){return new CatalogService(data,accounts,tenants,json,encoder,events,models);}
  @Bean com.nebula.iot.device.api.DeviceMediaAccess deviceMediaAccess(CatalogService catalog,AccountDirectory accounts){
-  return (actor,tenant,id) -> {
-   accounts.requirePermission(actor,"video:watch");
-   var detail=catalog.deviceDetail(actor,tenant,id);
-   if(!"ACTIVE".equals(detail.device().lifecycle()) || !detail.product().enabled())
-    throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,"Live device and product must be active");
-   return new com.nebula.iot.device.api.DeviceMediaAccess.Target(detail.device().tenantId()==null?"platform":detail.device().tenantId(),detail.device().id());
+  return new com.nebula.iot.device.api.DeviceMediaAccess(){
+   public Target requireWatch(String actor,String tenant,String id){
+    accounts.requirePermission(actor,"video:watch");
+    var detail=catalog.deviceDetail(actor,tenant,id);
+    if(!"ACTIVE".equals(detail.device().lifecycle()) || !detail.product().enabled())
+     throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,"Live device and product must be active");
+    return new Target(detail.device().tenantId()==null?"platform":detail.device().tenantId(),detail.device().id());
+   }
+   public Target requireActive(String tenant,String id){ return catalog.activeMediaTarget(tenant,id); }
   };
  }
 }

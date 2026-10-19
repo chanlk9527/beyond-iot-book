@@ -67,10 +67,18 @@ public final class LiveSessionService implements AutoCloseable {
         try { session.connection().send(signal); }
         catch (RuntimeException e) { remove(id); throw problem(HttpStatus.SERVICE_UNAVAILABLE, "Media signaling unavailable"); }
     }
+    public synchronized void send(Identity actor, String id, String tenant, String device, String channel, Signal signal) {
+        requireTarget(actor, id, tenant, device, channel);
+        send(actor, id, signal);
+    }
     public synchronized List<Signal> receive(Identity actor, String id) {
         var session = require(actor, id);
         try { return session.connection().drain(); }
         catch (RuntimeException e) { remove(id); throw problem(HttpStatus.SERVICE_UNAVAILABLE, "Media signaling unavailable"); }
+    }
+    public synchronized List<Signal> receive(Identity actor, String id, String tenant, String device, String channel) {
+        requireTarget(actor, id, tenant, device, channel);
+        return receive(actor, id);
     }
     public synchronized void delete(Identity actor, String id) {
         var session = sessions.get(id);
@@ -78,6 +86,15 @@ public final class LiveSessionService implements AutoCloseable {
         if (!session.owner().equals(actor)) throw problem(HttpStatus.NOT_FOUND, "Live session not found");
         // Owner may release their resources even after business permission has been revoked.
         remove(id);
+    }
+    public synchronized void delete(Identity actor, String id, String tenant, String device, String channel) {
+        requireTarget(actor, id, tenant, device, channel);
+        delete(actor, id);
+    }
+    private void requireTarget(Identity actor, String id, String tenant, String device, String channel) {
+        var session = require(actor, id);
+        if (!Objects.equals(session.tenant(), tenant) || !Objects.equals(session.device(), device) || !Objects.equals(session.channel(), channel))
+            throw problem(HttpStatus.NOT_FOUND, "Live session not found");
     }
     private Session require(Identity actor, String id) {
         var session = sessions.get(id);

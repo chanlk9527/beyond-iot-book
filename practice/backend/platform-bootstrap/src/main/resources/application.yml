@@ -1,4 +1,6 @@
 spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
@@ -34,9 +36,18 @@ management:
         enabled: true
 
 nebula:
+  eventbus:
+    mode: ${EVENTBUS_MODE:local}
+    node-id: ${EVENTBUS_NODE_ID:}
+    namespace: ${EVENTBUS_NAMESPACE:nebula}
+    topic: ${EVENTBUS_TOPIC:iot.platform.events.v1}
+    failure-topic: ${EVENTBUS_FAILURE_TOPIC:iot.platform.events.failed.v1}
+    handler-timeout: 30s
   management:
     enabled: false
   redis:
     enabled: ${REDIS_ENABLED:false}
+  access:
+    node-name: ${ACCESS_NODE_NAME:local-access}
   mqtt:
     enabled: ${MQTT_ENABLED:true}

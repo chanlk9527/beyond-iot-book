@@ -19,9 +19,9 @@ java -jar platform-bootstrap/target/platform-bootstrap-0.1.0-SNAPSHOT.jar
 
 ## 启动管理后端
 
-基础组合为 Spring MVC、Spring Security、MyBatis、PostgreSQL 和 Flyway。`platform-manager` 聚合 `identity-manager`、`tenant-manager`、`device-manager`，由现有 bootstrap 统一装配。管理功能通过 `management` profile 开启；未启用management的默认启动仍不需要数据库，此时MQTT缺少设备目录会拒绝认证；正常后台启动使用持久化登记设备目录。
+基础组合为 Spring MVC、Spring Security、MyBatis、PostgreSQL/MySQL 和 Flyway。`platform-manager` 聚合 `identity-manager`、`tenant-manager`、`device-manager`，由现有 bootstrap 统一装配。管理功能通过 `management` profile 开启；未启用management的默认启动仍不需要数据库，此时MQTT缺少设备目录会拒绝认证；正常后台启动使用持久化登记设备目录。
 
-先准备 [本地 PostgreSQL](../infra/README.md) 或已有数据库，再在本目录执行：
+先准备 [本地 PostgreSQL 或 MySQL](../infra/README.md) 或已有数据库，再在本目录执行：
 
 ```powershell
 $env:DATABASE_PASSWORD = Read-Host '输入数据库密码' -MaskInput
@@ -32,7 +32,7 @@ $env:NEBULA_MANAGEMENT_INITIAL_ACCOUNT_PASSWORD = Read-Host '输入初始账号�
 java -jar platform-bootstrap/target/platform-bootstrap-0.1.0-SNAPSHOT.jar --spring.profiles.active=management
 ```
 
-可覆盖 `DATABASE_URL`、`DATABASE_USERNAME`；默认 URL 为 `jdbc:postgresql://127.0.0.1:5432/nebula`，用户为 `nebula`。`management,mqtt-dev` 可组合启用，此时仍需 `MQTT_DEV_PASSWORD`；管理账号与设备凭证独立。
+可覆盖 `DATABASE_URL`、`DATABASE_USERNAME`；默认 URL 为 `jdbc:postgresql://127.0.0.1:5432/nebula`，用户为 `nebula`。MySQL 8.4 使用 `jdbc:mysql://127.0.0.1:3306/nebula?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true`；Flyway 会按 JDBC URL 自动选择对应迁移。`management,mqtt-dev` 可组合启用，此时仍需 `MQTT_DEV_PASSWORD`；管理账号与设备凭证独立。
 
 初始化账号仅在用户名不存在时创建，密码使用带算法标识的 BCrypt 哈希；重启不会覆盖现有密码。首次启动后移除三个初始化账号环境变量。账号停用或删除后，下一次管理 API 请求使已有会话失效。当前 Session 位于单进程内，重启需要重新登录；部署 HTTPS 时设置 `SESSION_COOKIE_SECURE=true`。本阶段不提供公开注册或密码重置；平台超级管理员通过下方显式初始化配置授权。
 
@@ -50,6 +50,10 @@ java -jar platform-bootstrap/target/platform-bootstrap-0.1.0-SNAPSHOT.jar --spri
 密码直接填写在`DATABASE_PASSWORD=`后面，不加引号，不做URL编码，`#`、`=`、`$`和反斜杠均按原样保留，不支持变量插值或行内注释。`-ValidateOnly`只校验文件，不连接数据库。默认加载已构建的启动JAR并启用management profile，启动会执行待应用的Flyway迁移。缺少JAR时按上方Maven命令构建。
 
 Supabase连接采用SSL；连接参数应从项目Connect面板复制。Direct connection通常需要IPv6，若本机网络无法直连，应改用Connect面板的Session pooler参数，不猜测pooler地址或用户名。参见[Supabase连接说明](https://supabase.com/docs/guides/database/connecting-to-postgres)。
+
+### TDengine 历史存储
+
+产品数据策略、属性／事件历史查询已接入独立的历史存储组件。默认 `HISTORY_PROVIDER=disabled`，按 [历史存储说明](platform-components/storage-component/README.md) 部署 TDengine、配置连接并重启管理／Worker 服务后，在产品页保存采集策略。业务通过 `HistoryStore` 接口访问存储，可新增其他时序数据库适配。当前支持逐次报告与按天保留，其余高级策略按能力禁用；真实服务器验收需显式运行集成测试。
 
 ### Redis（Upstash）
 
@@ -240,7 +244,7 @@ MQTT默认开启；management模式接入登记设备，缺少业务接收器时
 
 首版是基于Vert.x MQTT的定向设备接入服务端：本地明文TCP、单节点、短会话；不提供通用订阅分发、Retain、遗嘱、QoS 2、TLS、离线队列和持久会话。服务端声明相应能力并拒绝不支持的请求，MQTT 3连接被拒绝。它不等同于完整通用Broker。
 
-上行在模型校验和接收端成功后才发QoS 1确认；开发收件箱成功不代表持久化。真实Outbox／Inbox、跨重连去重、命令状态机、注册与管理后台仍待后续模块实现。网关健康可观察监听状态、连接与会话数、接收／拒绝计数，不代表尚未接入的数据库或其他依赖可用。
+上行在模型校验和接收端成功后才发QoS 1确认；开发收件箱成功不代表持久化。集群命令的持久化和专用 Outbox 见下方说明；其他领域的可靠交付、跨重连业务去重仍需后续实现。网关健康可观察监听状态、连接与会话数、接收／拒绝计数，不代表尚未接入的数据库或其他依赖可用。
 
 ## 创建业务模块
 
@@ -257,4 +261,88 @@ MQTT默认开启；management模式接入登记设备，缺少业务接收器时
 
 ## 音视频直播
 
-`video-manager` 提供管理端直播观看授权、会话和平台信令；`media-component` 封装 AWS KVS WebRTC，通过配置启用。配置、IAM、API、App 授权接入边界及撤销限制见 [直播模块说明](platform-manager/video-manager/README.md)。
+`video-manager` 提供管理端和经 App Server 代签授权的 C 端直播观看、会话和平台信令；`media-component` 封装 AWS KVS WebRTC，通过配置启用。配置、IAM、HMAC 请求头、API、App 授权接入边界及撤销限制见 [直播模块说明](platform-manager/video-manager/README.md)。
+
+## 设备接入基础：运行角色、节点与会话
+
+本阶段已交付运行角色隔离、共享节点目录、设备会话租约、限速排空与恢复接入。命令持久化、命令专用事务 Outbox 与跨节点下行已在显式 cluster-commands 模式交付；完整业务集群仍缺共享登录／实时票据、通用 Inbox／Outbox 及影子可靠闭环。Kafka 传输见下节，不把节点目录或 broker 连通当作业务集群验收。
+
+### 运行角色
+
+`nebula.runtime.role` 默认为 `all`，可通过 `--nebula.runtime.role=...` 或 `NEBULA_RUNTIME_ROLE` 设置。分离角色需要 `management` profile 提供领域与数据库适配，不会各自复制一套业务实现。
+
+| 角色 | 当前装配边界 |
+| --- | --- |
+| all | 保留组合开发方式，按原有配置启用 MQTT、管理 API 与影子消费者 |
+| management | 管理／OpenAPI、实时入口；强制关闭 MQTT 监听，不装配影子报告消费者 |
+| access | MQTT 与认证／模型适配；管理／OpenAPI 和 WebSocket 入口不装配，HTTP 只开放健康探针 |
+| worker | 影子报告消费者与领域适配；不装配 MQTT、管理 API 或 WebSocket；更多后台任务随领域能力交付 |
+
+未知角色或缺少 management profile 时分离角色启动失败。access 角色不能显式禁用 MQTT。身份／设备等数据适配仍可共享数据库；角色分离不代表已经完成数据所有权或远程业务闭环。
+
+### 启用共享成员与会话目录
+
+在已有数据库连接环境变量和管理账号基础上，显式增加 `cluster` profile。Flyway 额外加载组件自带的 `db/cluster/V21__access_cluster.sql`（MySQL 选择 `db/cluster-mysql`），创建节点、设备会话、维护任务和准入锁表；不改变未启用 cluster 的默认行为。一个共享数据库对应一个接入集群。可设置 `ACCESS_NODE_NAME` 和 `ACCESS_NODE_LEASE`，默认 `local-access`、`PT15S`；租约范围 5～300 秒，心跳周期 1 秒。
+
+例如，在后端目录、分别在独立终端启动下列进程（共用同一业务数据库；每个终端自行提供相同数据库连接环境变量）：
+
+```powershell
+java -jar platform-bootstrap/target/platform-bootstrap-0.1.0-SNAPSHOT.jar --spring.profiles.active=management,cluster --nebula.runtime.role=management --server.port=8080
+java -jar platform-bootstrap/target/platform-bootstrap-0.1.0-SNAPSHOT.jar --spring.profiles.active=management,cluster --nebula.runtime.role=access --nebula.access.node-name=access-a --server.port=8081 --nebula.mqtt.port=1883
+java -jar platform-bootstrap/target/platform-bootstrap-0.1.0-SNAPSHOT.jar --spring.profiles.active=management,cluster --nebula.runtime.role=access --nebula.access.node-name=access-b --server.port=8082 --nebula.mqtt.port=1884
+java -jar platform-bootstrap/target/platform-bootstrap-0.1.0-SNAPSHOT.jar --spring.profiles.active=management,cluster --nebula.runtime.role=worker --server.port=8083
+```
+
+这组命令用于成员／会话基础验证；跨角色上行消费还需配置 Kafka，具体配置见 [EventBus](EVENTBUS.md)，跨节点命令需按下节额外启用 cluster-commands。设备连接两个不同 MQTT 端口可验证接管；实际部署仍需接入层负载均衡分配新连接和重连。热加入不会迁移已有 TCP 连接。
+
+接入节点使用本次进程 UUID 注册，生效的设备会话带 nodeId、sessionId、epoch 和租约。接管后旧回调不能释放新会话；跨节点 ClientId 碰撞不会劫持其他设备。节点／会话失去租约或共享存储不可用时停止服务旧所有权，失效身份需重启才能重新加入。正常停止记录 OFFLINE，强杀后按租约失效；数据库备份恢复前须隔离旧实例，恢复后重新启动接入节点，不能依赖回滚后的旧 epoch 保证安全。
+
+当前按会话续约及按上／下行复核，SQL 在有界工作线程执行；尚未做大规模连接容量资格验证。历史节点、会话代次和任务记录没有自动保留清理策略，不应在未定义保留边界前直接删除会话代次行。
+
+### 持久化命令与跨节点下行
+
+所有访问同一数据库的进程使用相同集群配置。在前述启动命令的 profile 中增加 `cluster-commands`，即 `--spring.profiles.active=management,cluster,cluster-commands`；配置 `KAFKA_BOOTSTRAP_SERVERS` 及已创建的事件／失败 topic，详见 [Kafka EventBus](EVENTBUS.md)。模式强制使用 Kafka，缺少共享目录或 broker 能力时启动失败。`EVENTBUS_NODE_ID` 为空时自动生成本次进程 UUID；显式配置时各实例必须唯一，避免广播消费组互相分担。
+
+Flyway 加载 `db/cluster-device/V22__durable_commands.sql`（MySQL 为 `db/cluster-device-mysql`），新增命令、状态历史及 Outbox 表。已应用 V21／V22 的同库进程启动时须保留对应 profile／迁移位置，不能通过移除 profile 绕过已应用迁移校验。当前命令 JSON schema 为 v1，仅支持后台属性写入和操作调用；原 HTTP 路径及授权保留。
+
+API 返回 QUEUED 表示命令和待发布工作已同时保存。Worker 通过 Outbox Relay 发布，按有效会话路由；access 广播接收后只处理发给本次实例的工作，核对会话 token 后持久领取发送权。初版采用广播信号／目标节点过滤，尚未做大规模接入节点的定向通道优化。ROUTED 工作丢失信号可恢复，失效会话最多重查三次；SENDING 之后不自动重发。
+
+`GET .../devices/{id}/downlinks/{messageId}` 可在任一已授权管理实例查询同一记录，重启后保留。状态包含 QUEUED／ROUTED／SENDING／DELIVERED／ACCEPTED／SUCCEEDED／FAILED，以及 OFFLINE（无有效会话未发送）、EXPIRED（已过期未发送）、ROUTE_FAILED、UNKNOWN、TIMED_OUT。结果未知不能当作失败后新发同一业务动作；迟到最终反馈可补充确认，数据库状态历史保留此前超时。尚未提供命令历史列表、保留清理、Outbox 失败重放页面及积压容量准入。
+
+验证最小命令闭环及故障场景：
+
+```powershell
+mvn -B -ntp -s .mvn/settings-central.xml -pl platform-bootstrap -am -Dtest=DurableCommandsTest,ClusterCommandProcessTest -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+测试使用两个管理、两个接入、两个 Worker 独立 JVM、隔离 Kafka broker 与 H2 TCP 数据库，验证提交节点强杀、远端设备执行反馈、跨管理节点查询、重复发布不重复发送和未知结果不重发。两个管理节点分别登录，尚未通过共享登录或生产数据库兼容性验收。所有新集群表时间按 UTC 保存；MySQL 使用 DATETIME(3)，不会依赖进程时区解释节点租约。
+
+### 节点观察与维护 API
+
+平台超管从“接入运维 → 设备接入”（`/platform/access-nodes`）查看；普通租户 OWNER／ADMIN 不具备这些平台运维权限。服务端逐次校验，响应不缓存，写操作保留管理会话与 CSRF 校验。
+
+| 方法与路径（前缀 `/api/management/access/nodes`） | 行为 |
+| --- | --- |
+| GET （无后缀） | 未启用共享目录为 `scope=LOCAL_PROCESS`；启用后为 `CLUSTER_MEMBERSHIP`，最多展示最近 200 个节点，同时返回 totalNodes、complete、采样时间和有效会话去重总数 |
+| POST `/{nodeId}/drain` | cluster 模式下受理 `{operationId,revision,batchSize,timeoutSeconds}`，返回 202 和持久任务；batchSize 为每秒 1～1000 个认证会话，期限为 1～3600 秒 |
+| GET `/operations/{operationId}` | 查询排空或恢复接入任务，含目标、类型、操作者、进度、期限和结果；失联目标的在途任务标为 FAILED |
+| POST `/{nodeId}/resume` | `{operationId,revision}`，仅允许已完成排空、租约有效且有新鲜心跳的 DRAINING 实例恢复接入；保留操作审计 |
+
+操作 ID 使用 1～64 位字母、数字、下划线或连字符；同 ID 同请求幂等，内容冲突或过期 revision 返回 409。排空检查其他新鲜 ACTIVE 节点的采样余量，唯一节点或余量不足时返回 409；该估计不替代部署平台的容量与负载均衡控制。任务由目标实例逐秒执行，页面／调用方退出不取消任务。旧会话继续上下行，达到期限后关闭剩余认证连接；完成后保持 DRAINING，部署方再停止实例或调用恢复接入。cluster profile 的 readiness 探针包含接入准入判断：排空／失效时不就绪，liveness 不随排空变为失败，已有连接仍按有效会话服务。当前不自动在 SIGTERM 前执行完整排空，不替代容器扩缩容。
+
+节点字段包含实例标识、名称、MQTT 协议、lifecycle、最后心跳、租约、revision 和 fresh。`metrics` 包含监听、连接／上限、认证会话、上行成功／拒绝、工作线程及队列指标；缺失或过期返回不可用值，不填造为零。集群在线总数按有效会话归属计数；其他汇总在覆盖不完整时不显示为精确总量。监听状态不代表业务依赖健康；上行成功不自动等于持久化或设备执行完成。累计指标随网关重建重置。平台控制面板当前仍只读，维护操作通过上述 API 受理。
+
+验证目录规则、角色边界、真实 MQTT 及独立 JVM 故障场景（隔离的 H2 TCP 测试库，不连接现有业务数据库）：
+
+```powershell
+mvn -B -ntp -s .mvn/settings-central.xml -pl platform-bootstrap -am -Dtest=RuntimeRoleEnvironmentTest,JdbcNodeDirectoryTest,JdbcDeviceSessionDirectoryTest,AccessNodeApiTest,AccessNodeControllerTest,AccessClusterProcessTest,VertxMqttGatewayTest -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+多进程测试覆盖两个 access、一个 management 和一个 worker，及强杀后新实例重连；仍不替代第一版要求的两个 management、两个 access、两个 worker 完整业务闭环验收。PostgreSQL／MySQL 并发与故障兼容性仍需专项验证。
+## Kafka EventBus
+
+已支持本地／Kafka 模式切换、具名共享消费组和节点广播。启动配置、主题规模、交付语义和测试见 [EventBus 专项说明](EVENTBUS.md)。集群消息传输已实现，完整设备集群链路仍按架构规划推进。
+
+## 三个独立服务
+
+已提供 management-service、access-service、worker-service 三个可执行 JAR，启动脚本为 backend/scripts/Start-Service.ps1（后端目录内为 scripts/Start-Service.ps1）。构建、端口、共享依赖及跨进程验收见 [独立服务运行说明](platform-services/README.md)。原组合启动方式保留。

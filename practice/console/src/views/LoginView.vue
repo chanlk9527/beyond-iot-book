@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
+import { loginDestination } from '../security/loginDestination'
 import { useSessionStore } from '../stores/session'
 import { errorMessage, isCancelled } from '../api/management'
 import AppIcon from '../components/AppIcon.vue'
@@ -10,6 +11,7 @@ const busy = ref(false)
 const error = ref('')
 const session = useSessionStore()
 const router = useRouter()
+const route = useRoute()
 async function submit() {
   if (busy.value || !username.value.trim() || !password.value) return
   busy.value = true
@@ -17,7 +19,7 @@ async function submit() {
   try {
     await session.login(username.value, password.value)
     password.value = ''
-    await router.replace('/overview')
+    await router.replace(loginDestination(route.query.redirect))
   } catch (failure) {
     if (!isCancelled(failure)) error.value = errorMessage(failure)
     password.value = ''
@@ -42,6 +44,7 @@ async function submit() {
           <el-button type="primary" native-type="submit" size="large" :loading="busy" :disabled="!username.trim() || !password" class="login-submit">登录控制台<AppIcon name="arrow" :size="18" /></el-button>
         </form>
         <div class="login-note"><AppIcon name="shield" :size="17" /><span>请使用管理员为你开通的账号登录。</span></div>
+        <RouterLink to="/developer">无需登录，浏览开发者文档 →</RouterLink>
       </div>
       <footer class="login-bottom">星云 IoT 实战项目 <span>© {{ new Date().getFullYear() }} Nebula</span></footer>
     </section>

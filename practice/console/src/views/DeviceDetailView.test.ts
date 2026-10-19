@@ -11,6 +11,7 @@ vi.mock('element-plus',()=>({ElMessage:{success:vi.fn()},ElMessageBox:{confirm:v
 vi.mock('../api/catalog',async original=>({...await original<typeof import('../api/catalog')>(),catalogApi:{detail:vi.fn(),runtime:vi.fn()}}))
 vi.mock('../components/CatalogNavigation.vue',()=>({default:defineComponent(()=>()=>null)}))
 vi.mock('../components/DeviceShadowPanel.vue',()=>({default:defineComponent({props:['model'],setup:p=>()=>h('div',{'data-state':true},JSON.stringify(p.model))})}))
+vi.mock('../components/DeviceHistoryPanel.vue',()=>({default:defineComponent({props:{initialKind:String,eventOnly:Boolean},setup:p=>()=>h('div',{'data-history':p.initialKind||'PROPERTY','data-events-only':!!p.eventOnly},'真实历史查询')})}))
 const empty=():ModelSpec=>({properties:{},events:{},operations:{}})
 const model=():ModelSpec=>({properties:{nightLight:{id:'nightLight',schema:{type:'BOOLEAN'},access:'READ_WRITE'}},events:{alert:{id:'alert',fields:{message:{id:'message',schema:{type:'TEXT'},required:true}}}},operations:{reboot:{id:'reboot',inputs:{}}}})
 function detail(bound=model(),draft=bound):DeviceDetail{return {
@@ -57,10 +58,12 @@ it('explains an empty bound version with unpublished product capabilities withou
  button.click()
  expect(context.push).toHaveBeenCalledWith({path:'/catalog/tenants/ta/products/p',query:{tab:'model'}})
 })
-it('keeps the device model available when event loading fails',async()=>{
- vi.mocked(catalogApi.runtime).mockRejectedValue(new Error('Events unavailable'))
+it('routes event records to the actual history panel instead of the model placeholder snapshot',async()=>{
  const root=mount();await settle();await tab(root,'events')
- expect(root.textContent).toContain('事件加载失败')
+ expect(root.querySelector('[data-history="EVENT"][data-events-only="true"]')).toBeTruthy()
+ expect(catalogApi.runtime).not.toHaveBeenCalled()
+ await tab(root,'history')
+ expect(root.querySelector('[data-history="PROPERTY"]')).toBeTruthy()
  await tab(root,'capability')
  expect(root.textContent).toContain('nightLight')
  expect(root.textContent).not.toContain('设备详情加载失败')

@@ -3,7 +3,8 @@
  <modelVersion>4.0.0</modelVersion>
  <parent><groupId>com.nebula.iot</groupId><artifactId>platform-manager</artifactId><version>0.1.0-SNAPSHOT</version><relativePath>../pom.xml</relativePath></parent>
  <artifactId>device-manager</artifactId>
- <dependencies>
+ <dependencies><dependency><groupId>com.nebula.iot</groupId><artifactId>cluster-component</artifactId></dependency><dependency><groupId>com.fasterxml.jackson.datatype</groupId><artifactId>jackson-datatype-jdk8</artifactId></dependency><dependency><groupId>com.fasterxml.jackson.datatype</groupId><artifactId>jackson-datatype-jsr310</artifactId></dependency>
+  <dependency><groupId>com.nebula.iot</groupId><artifactId>storage-component</artifactId></dependency>
   <dependency><groupId>com.github.ben-manes.caffeine</groupId><artifactId>caffeine</artifactId></dependency>
   <dependency><groupId>org.springframework.data</groupId><artifactId>spring-data-redis</artifactId></dependency>
   <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>

@@ -4,24 +4,41 @@ import com.nebula.iot.device.api.DeviceMediaAccess;
 import com.nebula.iot.media.api.MediaProvider;
 import com.nebula.iot.media.kvs.KvsMediaProvider;
 import com.nebula.iot.video.api.LiveAccessPolicy;
+import com.nebula.iot.video.api.AppLiveRequestVerifier;
 import com.nebula.iot.video.application.LiveSessionService;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.concurrent.*;
 import org.springframework.boot.autoconfigure.condition.*;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.*;
 import org.springframework.security.access.AccessDeniedException;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+@org.springframework.boot.autoconfigure.condition.ConditionalOnExpression("${nebula.runtime.management:true}")
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "nebula.management.enabled", havingValue = "true")
 @EnableConfigurationProperties(LiveProperties.class)
 public class LiveConfiguration {
+    @Bean
+    @ConditionalOnProperty(name = "nebula.app.video.enabled", havingValue = "true")
+    AppLiveRequestVerifier appLiveRequestVerifier(
+            @org.springframework.beans.factory.annotation.Value("${nebula.app.video.app-id:}") String appId,
+            @org.springframework.beans.factory.annotation.Value("${nebula.app.video.signing-secret:}") String secret,
+            @org.springframework.beans.factory.annotation.Value("${nebula.app.video.signature-skew:PT60S}") Duration skew) {
+        return new AppLiveRequestVerifier(appId, secret, Clock.systemUTC(), skew);
+    }
+
     @Bean @ConditionalOnMissingBean(LiveAccessPolicy.class)
-    LiveAccessPolicy liveAccessPolicy(DeviceMediaAccess devices) {
+    LiveAccessPolicy liveAccessPolicy(DeviceMediaAccess devices,
+            @org.springframework.beans.factory.annotation.Value("${nebula.app.video.enabled:false}") boolean appEnabled) {
         return (identity, tenant, device, channel) -> {
-            if (identity.audience() != LiveAccessPolicy.Audience.MANAGEMENT)
-                throw new AccessDeniedException("App live authorization is not configured");
-            var target = devices.requireWatch(identity.subject(), tenant, device);
+            var target = switch (identity.audience()) {
+                case MANAGEMENT -> devices.requireWatch(identity.subject(), tenant, device);
+                case APP -> {
+                    if (!appEnabled) throw new AccessDeniedException("App live authorization is not enabled");
+                    yield devices.requireActive(tenant, device);
+                }
+            };
             return new LiveAccessPolicy.Target(target.scope(), target.deviceId(), channel);
         };
     }

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useSessionStore } from './stores/session'
 import StatePanel from './components/StatePanel.vue'
 const session = useSessionStore()
 const router = useRouter()
+const route = useRoute()
 async function retry() {
   await session.ensureSession(true)
   if (session.status !== 'error') await router.replace(session.authenticated ? '/overview' : '/login')
@@ -12,7 +13,8 @@ async function retry() {
 </script>
 <template>
   <el-config-provider :locale="zhCn">
-  <main v-if="session.status === 'error'" class="full-state">
+  <RouterView v-if="route.meta.public" />
+  <main v-else-if="session.status === 'error'" class="full-state">
     <StatePanel title="暂时无法连接控制台" :description="session.error" icon="connection">
       <el-button type="primary" @click="retry">重新连接</el-button>
     </StatePanel>

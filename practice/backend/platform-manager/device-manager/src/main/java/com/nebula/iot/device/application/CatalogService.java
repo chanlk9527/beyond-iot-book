@@ -133,6 +133,15 @@ public class CatalogService {
   spec.events().keySet().forEach(e->events.add(new EventSnapshot(e,"暂无事件","","暂无设备事件上报")));
   return new DeviceRuntimeSnapshot(properties,events);
  }
+ /** Authoritative state check for a trusted App Server integration. */
+ public com.nebula.iot.device.api.DeviceMediaAccess.Target activeMediaTarget(String tenant,String id){
+  String scope = tenant == null || tenant.isBlank() ? null : tenant;
+  var row = deviceRow(scope,id);
+  var product = productRow(scope,row.productId());
+  if(!"ACTIVE".equals(row.lifecycle()) || !product.enabled())
+   throw new ResponseStatusException(HttpStatus.CONFLICT,"Live device and product must be active");
+  return new com.nebula.iot.device.api.DeviceMediaAccess.Target(row.tenantId()==null?"platform":row.tenantId(),row.id());
+ }
  @Transactional public Credential register(String actor,String tenant,String productId,String code,String name,String version){
   String scope=access(actor,tenant,"device:write",true);String actualCode=code==null||code.isBlank()?deviceCode():code.strip();validCode(actualCode);validName(name);
   // Registering a device exposes a new credential, so both capabilities are required.

@@ -15,6 +15,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
 
+@org.springframework.boot.autoconfigure.condition.ConditionalOnExpression("${nebula.runtime.management:true}")
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "nebula.management.enabled", havingValue = "true")
 @EnableMethodSecurity
@@ -28,10 +29,12 @@ public class ManagementSecurityConfiguration {
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**",
                                 "/api/management/auth/csrf").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/management/auth/login").permitAll()
+                        .requestMatchers("/api/app/video/**").permitAll()
                         .requestMatchers("/api/management/**").authenticated()
                         .anyRequest().denyAll())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .requestCache(cache -> cache.disable())
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/app/video/**"))
                 .formLogin(login -> login.loginPage("/api/management/auth/login").loginProcessingUrl("/api/management/auth/login")
                         .successHandler((request, response, auth) -> response.setStatus(204))
                         .failureHandler((request, response, exception) ->

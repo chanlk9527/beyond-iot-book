@@ -14,6 +14,8 @@ if (![System.IO.File]::Exists($ConfigPath)) {
 $allowedKeys = @(
     'DATABASE_URL', 'DATABASE_USERNAME', 'DATABASE_PASSWORD',
     'REDIS_ENABLED', 'REDIS_URL', 'REDIS_COMMAND_TIMEOUT_MS',
+    'HISTORY_PROVIDER', 'HISTORY_MAXIMUM_RETENTION_DAYS', 'HISTORY_CLEANUP_INTERVAL_MS',
+    'TDENGINE_URL', 'TDENGINE_USERNAME', 'TDENGINE_PASSWORD', 'TDENGINE_DATABASE',
     'MQTT_ENABLED', 'MQTT_PORT',
     'NEBULA_MANAGEMENT_INITIAL_ACCOUNT_USERNAME', 'NEBULA_MANAGEMENT_INITIAL_ACCOUNT_PASSWORD',
     'NEBULA_MANAGEMENT_INITIAL_ACCOUNT_PLATFORM_ADMIN'
@@ -26,7 +28,7 @@ foreach ($line in ($content -split '\r?\n')) {
     $separator = $line.IndexOf('=')
     if ($separator -lt 1) { throw 'Invalid local configuration: expected KEY=value. Values are not printed.' }
     $key = $line.Substring(0, $separator).Trim()
-    if ($key -cnotin $allowedKeys) { throw 'Unsupported configuration key. Only database, Redis, MQTT and initial management account settings are allowed.' }
+    if ($key -cnotin $allowedKeys) { throw 'Unsupported configuration key. Only database, Redis, history, MQTT and initial management account settings are allowed.' }
     if ($settings.ContainsKey($key)) { throw 'Duplicate local configuration key. Values are not printed.' }
     $value = $line.Substring($separator + 1)
     if ([string]::IsNullOrWhiteSpace($value) -or $value.Contains('__FILL_')) {
@@ -37,8 +39,8 @@ foreach ($line in ($content -split '\r?\n')) {
 foreach ($required in @('DATABASE_URL', 'DATABASE_USERNAME', 'DATABASE_PASSWORD')) {
     if (!$settings.ContainsKey($required)) { throw "Missing $required in the local configuration file." }
 }
-if (!$settings['DATABASE_URL'].StartsWith('jdbc:postgresql://')) {
-    throw 'DATABASE_URL must be a PostgreSQL JDBC URL.'
+if (!$settings['DATABASE_URL'].StartsWith('jdbc:postgresql://') -and !$settings['DATABASE_URL'].StartsWith('jdbc:mysql://')) {
+    throw 'DATABASE_URL must be a PostgreSQL or MySQL JDBC URL.'
 }
 $initialName = $settings.ContainsKey('NEBULA_MANAGEMENT_INITIAL_ACCOUNT_USERNAME')
 $initialPassword = $settings.ContainsKey('NEBULA_MANAGEMENT_INITIAL_ACCOUNT_PASSWORD')

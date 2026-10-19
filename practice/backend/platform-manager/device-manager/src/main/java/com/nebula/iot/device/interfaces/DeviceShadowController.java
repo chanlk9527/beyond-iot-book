@@ -8,6 +8,7 @@ import java.util.Map;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.*;
 
+@org.springframework.boot.autoconfigure.condition.ConditionalOnExpression("${nebula.runtime.management:true}")
 @RestController
 @RequestMapping({"/api/management/catalog/platform/devices/{id}/shadow",
                  "/api/management/catalog/tenants/{tenantId}/devices/{id}/shadow"})

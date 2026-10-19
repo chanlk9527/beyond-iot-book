@@ -13,11 +13,11 @@ public interface CatalogMapper extends CatalogRepository {
  @Update("UPDATE device_product_directory SET tree_json=#{tree},revision=revision+1 WHERE scope_key=#{scope} AND revision=#{revision}") int updateDirectory(@Param("scope")String scope,@Param("tree")String tree,@Param("revision")long revision);
  String P="id,tenant_id AS tenantId,scope_key AS scopeKey,code,name,description,enabled,draft_model AS draftModel,latest_version AS latestVersion,revision,configuration";
  String D="d.id,d.tenant_id AS tenantId,d.scope_key AS scopeKey,d.product_id AS productId,p.name AS productName,d.code,d.name,d.model_version AS modelVersion,d.lifecycle,d.credential_version AS credentialVersion,d.revision,d.credential_secret AS credentialSecret";
- String SEARCH="(CAST(#{scope} AS VARCHAR) IS NULL OR scope_key=#{scope}) AND (POSITION(LOWER(#{query}) IN LOWER(name))>0 OR POSITION(LOWER(#{query}) IN LOWER(code))>0) AND (#{category}='' OR POSITION(#{category} IN configuration)>0)";
+ String SEARCH="(COALESCE(#{scope}, '') = '' OR scope_key=#{scope}) AND (POSITION(LOWER(#{query}) IN LOWER(name))>0 OR POSITION(LOWER(#{query}) IN LOWER(code))>0) AND (#{category}='' OR POSITION(#{category} IN configuration)>0)";
  @Select("SELECT "+P+" FROM device_product WHERE "+SEARCH+" ORDER BY code,id LIMIT #{limit} OFFSET #{offset}")
  List<ProductRow> products(@Param("scope")String scope,@Param("query")String query,@Param("category")String category,@Param("limit")int limit,@Param("offset")long offset);
  @Select("SELECT COUNT(*) FROM device_product WHERE "+SEARCH) long productCount(@Param("scope")String scope,@Param("query")String query,@Param("category")String category);
- @Select("SELECT "+P+" FROM device_product WHERE (CAST(#{scope} AS VARCHAR) IS NULL OR scope_key=#{scope}) AND id=#{id}") ProductRow product(@Param("scope")String scope,@Param("id")String id);
+ @Select("SELECT "+P+" FROM device_product WHERE (COALESCE(#{scope}, '') = '' OR scope_key=#{scope}) AND id=#{id}") ProductRow product(@Param("scope")String scope,@Param("id")String id);
  @Select("SELECT "+P+" FROM device_product WHERE scope_key=#{scope} AND id=#{id} FOR UPDATE") ProductRow lockProduct(@Param("scope")String scope,@Param("id")String id);
  @Insert("INSERT INTO device_product(id,tenant_id,scope_key,code,name,description,draft_model,configuration) VALUES(#{id},#{tenant},#{scope},#{code},#{name},#{description},#{model},#{configuration})")
  void insertProduct(@Param("id")String id,@Param("tenant")String tenant,@Param("scope")String scope,@Param("code")String code,@Param("name")String name,@Param("description")String description,@Param("model")String model,@Param("configuration")String configuration);
@@ -34,11 +34,11 @@ public interface CatalogMapper extends CatalogRepository {
  String M="m.version,m.model_json AS modelJson,m.published_at AS publishedAt,(SELECT COUNT(*) FROM device_registration d WHERE d.product_id=m.product_id AND d.model_version=m.version) AS deviceCount";
  @Select("SELECT "+M+" FROM device_model_version m WHERE m.product_id=#{id} ORDER BY m.published_at DESC,m.version") List<ModelRow> models(String id);
  @Select("SELECT "+M+" FROM device_model_version m WHERE m.product_id=#{id} AND m.version=#{version}") ModelRow model(@Param("id")String id,@Param("version")String version);
- String DS="(CAST(#{scope} AS VARCHAR) IS NULL OR d.scope_key=#{scope}) AND (POSITION(LOWER(#{query}) IN LOWER(d.name))>0 OR POSITION(LOWER(#{query}) IN LOWER(d.code))>0) AND (#{productId}='' OR d.product_id=#{productId})";
+ String DS="(COALESCE(#{scope}, '') = '' OR d.scope_key=#{scope}) AND (POSITION(LOWER(#{query}) IN LOWER(d.name))>0 OR POSITION(LOWER(#{query}) IN LOWER(d.code))>0) AND (#{productId}='' OR d.product_id=#{productId})";
  @Select("SELECT "+D+" FROM device_registration d JOIN device_product p ON p.id=d.product_id WHERE "+DS+" ORDER BY d.code,d.id LIMIT #{limit} OFFSET #{offset}")
  List<DeviceRow> devices(@Param("scope")String scope,@Param("query")String query,@Param("productId")String productId,@Param("limit")int limit,@Param("offset")long offset);
  @Select("SELECT COUNT(*) FROM device_registration d WHERE "+DS) long deviceCount(@Param("scope")String scope,@Param("query")String query,@Param("productId")String productId);
- @Select("SELECT "+D+" FROM device_registration d JOIN device_product p ON p.id=d.product_id WHERE (CAST(#{scope} AS VARCHAR) IS NULL OR d.scope_key=#{scope}) AND d.id=#{id}") DeviceRow device(@Param("scope")String scope,@Param("id")String id);
+ @Select("SELECT "+D+" FROM device_registration d JOIN device_product p ON p.id=d.product_id WHERE (COALESCE(#{scope}, '') = '' OR d.scope_key=#{scope}) AND d.id=#{id}") DeviceRow device(@Param("scope")String scope,@Param("id")String id);
  @Insert("INSERT INTO device_registration(id,tenant_id,scope_key,product_id,code,name,model_version,lifecycle,credential_hash,credential_secret) VALUES(#{id},#{tenant},#{scope},#{productId},#{code},#{name},#{version},'ACTIVE',#{hash},#{secret})")
  void insertDevice(@Param("id")String id,@Param("tenant")String tenant,@Param("scope")String scope,@Param("productId")String productId,@Param("code")String code,@Param("name")String name,@Param("version")String version,@Param("hash")String hash,@Param("secret")String secret);
  @Update("UPDATE device_registration SET name=#{name},lifecycle=#{lifecycle},revision=revision+1 WHERE scope_key=#{scope} AND id=#{id} AND revision=#{revision}")

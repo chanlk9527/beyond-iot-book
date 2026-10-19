@@ -17,9 +17,9 @@ public interface RbacMapper extends RbacRepository {
     @Select("SELECT DISTINCT p.permission FROM identity_account_role a JOIN identity_role r ON r.id=a.role_id JOIN identity_role_permission p ON p.role_id=r.id WHERE a.account_id=#{accountId} AND r.enabled=TRUE ORDER BY p.permission")
     List<String> effectivePermissions(String accountId);
     @Select("SELECT id FROM identity_security_lock WHERE id=1 FOR UPDATE") int lock();
-    @Select("SELECT id,username,enabled,platform_admin AS platformAdmin,revision,tenant_id AS tenantId FROM identity_account WHERE (CAST(#{tenantId} AS VARCHAR) IS NULL OR tenant_id=#{tenantId}) AND POSITION(LOWER(#{query}) IN LOWER(username))>0 ORDER BY username LIMIT #{limit} OFFSET #{offset}")
+    @Select("SELECT id,username,enabled,platform_admin AS platformAdmin,revision,tenant_id AS tenantId FROM identity_account WHERE (COALESCE(#{tenantId}, '') = '' OR tenant_id=#{tenantId}) AND POSITION(LOWER(#{query}) IN LOWER(username))>0 ORDER BY username LIMIT #{limit} OFFSET #{offset}")
     List<UserRow> users(@Param("query") String query,@Param("limit") int limit,@Param("offset") long offset,@Param("tenantId") String tenantId);
-    @Select("SELECT COUNT(*) FROM identity_account WHERE (CAST(#{tenantId} AS VARCHAR) IS NULL OR tenant_id=#{tenantId}) AND POSITION(LOWER(#{query}) IN LOWER(username))>0") long userCount(@Param("query") String query,@Param("tenantId") String tenantId);
+    @Select("SELECT COUNT(*) FROM identity_account WHERE (COALESCE(#{tenantId}, '') = '' OR tenant_id=#{tenantId}) AND POSITION(LOWER(#{query}) IN LOWER(username))>0") long userCount(@Param("query") String query,@Param("tenantId") String tenantId);
     @Select("SELECT id,username,enabled,platform_admin AS platformAdmin,revision,tenant_id AS tenantId FROM identity_account WHERE id=#{id}") UserRow user(String id);
     @Insert("INSERT INTO identity_account(id,username,password_hash,tenant_id) VALUES(#{id},#{username},#{passwordHash},#{tenantId})")
     void createUser(@Param("id") String id,@Param("username") String username,@Param("passwordHash") String passwordHash,@Param("tenantId") String tenantId);

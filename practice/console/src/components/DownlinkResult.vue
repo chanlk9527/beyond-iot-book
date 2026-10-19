@@ -5,8 +5,8 @@ import { errorMessage, isCancelled } from '../api/management'
 const props=defineProps<{scope:string;deviceId:string;initial:DownlinkStatus}>()
 const emit=defineEmits<{pending:[value:boolean]}>()
 const current=ref(props.initial), error=ref('')
-const waiting=(status:string)=>['SENDING','DELIVERED','ACCEPTED'].includes(status)
-const labels:Record<string,string>={SENDING:'正在发送',DELIVERED:'已投递，等待设备回执',ACCEPTED:'设备已受理，等待执行结果',SUCCEEDED:'设备执行成功',FAILED:'设备执行失败',DISPATCH_FAILED:'下发未确认',TIMED_OUT:'回执超时，结果未知'}
+const waiting=(status:string)=>['QUEUED','ROUTED','SENDING','DELIVERED','ACCEPTED'].includes(status)
+const labels:Record<string,string>={QUEUED:'已保存，等待路由',ROUTED:'已路由，等待接入节点',UNKNOWN:'投递结果未知',OFFLINE:'设备离线，未发送',EXPIRED:'命令已过期',ROUTE_FAILED:'会话路由失败',SENDING:'正在发送',DELIVERED:'已投递，等待设备回执',ACCEPTED:'设备已受理，等待执行结果',SUCCEEDED:'设备执行成功',FAILED:'设备执行失败',DISPATCH_FAILED:'下发未确认',TIMED_OUT:'回执超时，结果未知'}
 let timer:ReturnType<typeof setTimeout>|undefined, request=new AbortController(), disposed=false
 function stop(){if(timer)clearTimeout(timer);timer=undefined}
 function schedule(){
@@ -26,7 +26,7 @@ onScopeDispose(()=>{disposed=true;stop();request.abort()})
 </script>
 <template>
  <div class="downlink-result" role="status">
-  <el-alert :title="labels[current.status]||current.status" :type="current.status==='SUCCEEDED'?'success':['FAILED','DISPATCH_FAILED','TIMED_OUT'].includes(current.status)?'warning':'info'" :closable="false"/>
+  <el-alert :title="labels[current.status]||current.status" :type="current.status==='SUCCEEDED'?'success':['FAILED','DISPATCH_FAILED','TIMED_OUT','UNKNOWN','OFFLINE','EXPIRED','ROUTE_FAILED'].includes(current.status)?'warning':'info'" :closable="false"/>
   <p>{{current.message}} <span v-if="current.code">（{{current.code}}）</span></p>
   <p class="mono">消息 ID：{{current.messageId}}<template v-if="current.commandId"> · 指令 ID：{{current.commandId}}</template></p>
   <p v-if="error" class="result-error">回执查询失败：{{error}}。执行结果尚未确认。</p>

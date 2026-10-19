@@ -7,27 +7,35 @@ const state = vi.hoisted(() => ({
     authenticated: true, status: 'ready',
     account: { platformAdmin: false, tenantId: 'ta', permissions: [] as string[] },
     ensureSession: vi.fn(), can: (code: string): boolean => state.session.account.permissions.includes(code),
+    tenant: {role:'VIEWER'}, refreshTenant: vi.fn(),
   },
 }))
 vi.mock('../stores/session', () => ({ useSessionStore: () => state.session }))
 vi.mock('vue-router', () => ({
   createWebHistory: vi.fn(),
   createRouter: (options: any) => {
-    state.routes = options.routes[1].children
+    function flatten(routes: any[], parent = ''): any[] {
+      return routes.flatMap(route => {
+        const path = route.path.startsWith('/') ? route.path.slice(1) : [parent,route.path].filter(Boolean).join('/')
+        return [{...route,path},...flatten(route.children || [],path)]
+      })
+    }
+    state.routes = flatten(options.routes)
     return { beforeEach: (guard: typeof state.guard) => { state.guard = guard }, afterEach: vi.fn() }
   },
 }))
 import './index'
 
 function visit(path: string, params: Record<string, string> = {}) {
-  const route = state.routes.find(route => route.path === path)
-  return state.guard!({ name: route.name, meta: route.meta || {}, params })
+  const route = state.routes.find(route => route.path === path && route.name)
+  return state.guard!({ name: route.name, meta: route.meta || {}, params, query: {} })
 }
 describe('page access guard', () => {
   beforeEach(() => {
     state.session.authenticated = true; state.session.status = 'ready'
     state.session.account = { platformAdmin: false, tenantId: 'ta', permissions: [] }
     state.session.ensureSession.mockReset()
+    state.session.tenant.role='VIEWER'; state.session.refreshTenant.mockReset()
   })
   it('does not infer page access from shared API permissions', async () => {
     state.session.account.permissions = ['product:read', 'iam:role:read']
@@ -62,5 +70,36 @@ describe('page access guard', () => {
   it('does not open a protected page when grant refresh fails', async () => {
     state.session.ensureSession.mockImplementationOnce(async () => { state.session.status = 'error' })
     expect(await visit('access/menus')).toEqual({ name: 'overview' })
+  })
+  it('opens the developer panel only after verifying the tenant administrator role', async () => {
+    expect(await visit('developer/apps')).toEqual({name:'overview'})
+    state.session.refreshTenant.mockImplementationOnce(async()=>{state.session.tenant.role='ADMIN'})
+    expect(await visit('developer/apps')).toBeUndefined()
+    expect(state.session.refreshTenant).toHaveBeenCalled()
+  })
+  it('restricts access node observations to platform administrators', async () => {
+    expect(await visit('platform/access-nodes')).toEqual({name:'overview'})
+    state.session.account.platformAdmin=true
+    expect(await visit('platform/access-nodes')).toBeUndefined()
+  })
+  it('restricts platform reviews and redirects platform administrators to their own panel', async () => {
+    expect(await visit('platform/openapi')).toEqual({name:'overview'})
+    state.session.account.platformAdmin=true
+    expect(await visit('platform/openapi')).toBeUndefined()
+    expect(await visit('developer/apps')).toEqual({name:'openapi-management'})
+  })
+  it('allows anonymous public documentation without contacting management APIs', async () => {
+    state.session.authenticated=false; state.session.status='anonymous'
+    for (const path of ['developer','developer/docs/:slug?','developer/examples']) expect(await visit(path)).toBe(true)
+    expect(state.session.ensureSession).not.toHaveBeenCalled()
+  })
+  it('keeps public documentation available when the backend is unavailable', async () => {
+    state.session.status='error'
+    expect(await visit('developer/docs/:slug?')).toBe(true)
+    expect(state.session.ensureSession).not.toHaveBeenCalled()
+  })
+  it('remembers the application destination while requiring login', async () => {
+    state.session.authenticated=false;state.session.status='anonymous'
+    expect(await visit('developer/apps')).toEqual({name:'login',query:{redirect:'/developer/apps'}})
   })
 })

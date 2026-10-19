@@ -7,6 +7,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -20,6 +21,17 @@ public final class ThreeLevelCache<K, V> {
     private final StringRedisTemplate redis;
     private final Duration redisTtl;
     private final Function<K, String> keyEncoder;
+    /*
+     * A local hit used to perform a synchronous Redis GET for the generation on
+     * every access. With a remote Redis this made the hot MQTT command path pay
+     * one network round trip per cache lookup, even when the value was already
+     * in Caffeine. Poll generation briefly; local writes still invalidate the
+     * Caffeine entry immediately and cross-node invalidation is bounded by this
+     * small interval.
+     */
+    private static final long GENERATION_CHECK_INTERVAL_NANOS = TimeUnit.MILLISECONDS.toNanos(250);
+    private volatile String generationSnapshot = "0";
+    private volatile long generationCheckedAtNanos;
     private final LongAdder localHits = new LongAdder();
     private final LongAdder redisHits = new LongAdder();
     private final LongAdder sourceLoads = new LongAdder();
@@ -57,7 +69,13 @@ public final class ThreeLevelCache<K, V> {
 
     public void clear() {
         local.invalidateAll();
-        if (redis != null) try { redis.opsForValue().increment(namespace + ":generation"); } catch (Exception ignored) { }
+        if (redis != null) {
+            try { redis.opsForValue().increment(namespace + ":generation"); }
+            catch (Exception ignored) { }
+            // A local invalidation must observe the new generation immediately;
+            // do not let the polling window resurrect an old Redis value.
+            generationCheckedAtNanos = 0;
+        }
     }
 
     public CacheStats stats() { return new CacheStats(localHits.sum(), redisHits.sum(), sourceLoads.sum(), local.estimatedSize()); }
@@ -87,10 +105,18 @@ public final class ThreeLevelCache<K, V> {
 
     private String generation() {
         if (redis == null) return "0";
-        try {
-            var value = redis.opsForValue().get(namespace + ":generation");
-            return value == null ? "0" : value;
-        } catch (Exception ignored) { return "0"; }
+        long now = System.nanoTime();
+        if (now - generationCheckedAtNanos < GENERATION_CHECK_INTERVAL_NANOS) return generationSnapshot;
+        synchronized (this) {
+            now = System.nanoTime();
+            if (now - generationCheckedAtNanos < GENERATION_CHECK_INTERVAL_NANOS) return generationSnapshot;
+            try {
+                var value = redis.opsForValue().get(namespace + ":generation");
+                generationSnapshot = value == null ? "0" : value;
+            } catch (Exception ignored) { generationSnapshot = "0"; }
+            generationCheckedAtNanos = now;
+            return generationSnapshot;
+        }
     }
 
     private void writeRedis(K key, V value, String generation) {

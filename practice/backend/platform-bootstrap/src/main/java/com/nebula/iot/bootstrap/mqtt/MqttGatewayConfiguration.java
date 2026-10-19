@@ -79,7 +79,7 @@ public class MqttGatewayConfiguration {
     @Bean
     VertxMqttGateway mqttGateway(Vertx mqttVertx, MqttAccessProperties properties,
             ObjectProvider<DeviceAccessResolver> resolvers,
-            ProtocolSupport protocol, ObjectProvider<DeviceMessageHandler> handlers, ObjectProvider<DeviceAccessGateway> gateways, EventBus eventBus, ObjectProvider<DeviceCommandService> commands, ObjectProvider<com.nebula.iot.bootstrap.subscription.DevicePresence> presence) {
+            ProtocolSupport protocol, ObjectProvider<DeviceMessageHandler> handlers, ObjectProvider<DeviceAccessGateway> gateways, EventBus eventBus, ObjectProvider<DeviceCommandService> commands, ObjectProvider<com.nebula.iot.device.api.DurableCommands> durable, ObjectProvider<com.nebula.iot.bootstrap.subscription.DevicePresence> presence) {
         var options = new MqttGatewayOptions(properties.host(), properties.port(), properties.maxConnections(),
                 properties.maxMessageBytes(), properties.maxInFlight(), properties.workerThreads(), properties.maxQueuedWork(),
                 properties.authenticationTimeout(), properties.processingTimeout(), properties.acknowledgementTimeout());
@@ -87,11 +87,11 @@ public class MqttGatewayConfiguration {
         var authenticator = protocol.authenticator();
         var resolver = resolvers.getIfAvailable(() -> key -> CompletableFuture.completedFuture(Optional.empty()));
         var delegate = handlers.getIfAvailable(() -> message -> {
-            if (!properties.developmentMode() && (message.body() instanceof DeviceMessageBody.PropertyReport || message.body() instanceof DeviceMessageBody.CommandReply || message.body() instanceof DeviceMessageBody.PropertyWriteReply || message.body() instanceof DeviceMessageBody.RequestFailure))
+            if (!properties.developmentMode() && (message.body() instanceof DeviceMessageBody.PropertyReport || message.body() instanceof DeviceMessageBody.EventReport || message.body() instanceof DeviceMessageBody.CommandReply || message.body() instanceof DeviceMessageBody.PropertyWriteReply || message.body() instanceof DeviceMessageBody.RequestFailure))
                 return CompletableFuture.completedFuture(null);
             return CompletableFuture.failedFuture(new IllegalStateException("未配置此类上行消息的业务接收器"));
         });
-        var handler = new EventPublishingDeviceMessageHandler(message -> delegate.handle(message).thenRun(() -> commands.ifAvailable(service -> service.accept(message))), eventBus);
+        var handler = new EventPublishingDeviceMessageHandler(message -> delegate.handle(message).thenRun(() -> { var persistent=durable.getIfAvailable(); if(persistent!=null)persistent.accept(message);else commands.ifAvailable(service -> service.accept(message)); }), eventBus);
         var receiver = protocol instanceof OfficialMqttProtocol
                 ? new OfficialSystemMessageHandler(message -> gateways.getObject().send(message), handler, java.time.Clock.systemUTC()) : handler;
         var gateway = new VertxMqttGateway(mqttVertx, options, authenticator, resolver, protocol.codec(Transport.MQTT), receiver);
@@ -102,6 +102,7 @@ public class MqttGatewayConfiguration {
     @Bean
     SmartLifecycle mqttGatewayLifecycle(VertxMqttGateway gateway) {
         return new SmartLifecycle() {
+            @Override public int getPhase() { return 0; }
             @Override public void start() { gateway.start().toCompletableFuture().orTimeout(15, TimeUnit.SECONDS).join(); }
             @Override public void stop() { gateway.stop().toCompletableFuture().orTimeout(15, TimeUnit.SECONDS).join(); }
             @Override public boolean isRunning() { return gateway.isRunning(); }

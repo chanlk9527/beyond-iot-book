@@ -1,0 +1,11 @@
+# Independent launchers always add management, cluster and service profiles.
+spring:
+  application:
+    name: nebula-${nebula.runtime.service}
+server:
+  port: ${SERVER_PORT:${nebula.service.http-port}}
+nebula:
+  eventbus:
+    mode: ${EVENTBUS_MODE:kafka}
+  redis:
+    enabled: ${REDIS_ENABLED:true}

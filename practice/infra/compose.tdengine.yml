@@ -1,0 +1,18 @@
+name: nebula-history
+services:
+  tdengine:
+    image: tdengine/tdengine:3.3.6.13
+    hostname: tdengine
+    ports:
+      - "127.0.0.1:6041:6041"
+    volumes:
+      - tdengine-data:/var/lib/taos
+      - tdengine-logs:/var/log/taos
+    healthcheck:
+      test: ["CMD", "taos", "-s", "SELECT SERVER_VERSION()"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+volumes:
+  tdengine-data:
+  tdengine-logs:

@@ -9,11 +9,12 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.*;
 
+@org.springframework.boot.autoconfigure.condition.ConditionalOnExpression("${nebula.runtime.management:true}")
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "nebula.management.enabled", havingValue = "true")
 public class DeviceCommandConfiguration {
     @Bean DeviceCommandService deviceCommandService(CatalogService catalog, AccountDirectory accounts,
-            TenantAccess tenants, ObjectProvider<DeviceDownlinkSender> senders) {
-        return new DeviceCommandService(catalog, accounts, tenants, senders::getIfAvailable, Clock.systemUTC());
+            TenantAccess tenants, ObjectProvider<DeviceDownlinkSender> senders, ObjectProvider<com.nebula.iot.device.api.DurableCommands> durable) {
+        return new DeviceCommandService(catalog, accounts, tenants, senders::getIfAvailable, Clock.systemUTC(),durable.getIfAvailable());
     }
 }

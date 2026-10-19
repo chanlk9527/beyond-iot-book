@@ -1,0 +1,13 @@
+# Membership/session foundation only. Requires management profile and a shared database.
+# Reliable business messaging, durable commands and cross-node downlink are not yet delivered.
+nebula:
+  cluster:
+    enabled: true
+    lease: ${ACCESS_NODE_LEASE:PT15S}
+
+management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,clusterMembership

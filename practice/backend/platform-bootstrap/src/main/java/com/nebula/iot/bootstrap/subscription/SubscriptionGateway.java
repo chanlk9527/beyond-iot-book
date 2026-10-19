@@ -17,6 +17,7 @@ import org.springframework.web.socket.*;
 import org.springframework.web.socket.handler.*;
 
 /** Resource-authorized external notifications; deliberately no arbitrary internal-topic API. */
+@org.springframework.boot.autoconfigure.condition.ConditionalOnExpression("${nebula.runtime.management:true}")
 @Component
 @ConditionalOnProperty(name = "nebula.management.enabled", havingValue = "true")
 public class SubscriptionGateway extends TextWebSocketHandler {
@@ -36,7 +37,7 @@ public class SubscriptionGateway extends TextWebSocketHandler {
 
     public SubscriptionGateway(CatalogService catalog, ObjectMapper json, EventBus bus) {
         this.catalog = catalog; this.json = json;
-        subscription = bus.subscribe("external/device/*", event -> {
+        subscription = bus.subscribe(SubscriptionSpec.broadcast("realtime-v1", "external/device/*"), event -> {
             // No socket I/O or database queries on the event-bus callback.
             clients.values().forEach(client -> {
                 if (client.grant.devices().contains(new Resource(platformTenant(event.tenantId()), event.deviceId())))

@@ -34,6 +34,13 @@ function navigate(path: string) { menuOpen.value = false; void router.push(path)
       <nav aria-label="主导航">
         <div class="nav-caption">工作台</div>
         <button class="nav-item" :class="{ active: route.name === 'overview' }" :aria-current="route.name === 'overview' ? 'page' : undefined" @click="navigate('/overview')"><AppIcon name="grid" />控制台概览</button>
+          <div class="nav-caption roadmap-caption">开放平台</div>
+          <button class="nav-item" @click="navigate('/developer')"><AppIcon name="connection" />开发者中心 ↗</button>
+          <button v-if="session.account?.platformAdmin" class="nav-item" :class="{active:route.name === 'openapi-management'}" @click="navigate('/platform/openapi')"><AppIcon name="shield" />开放平台管理</button>
+        <template v-if="session.account?.platformAdmin">
+          <div class="nav-caption roadmap-caption">接入运维</div>
+          <button class="nav-item" :class="{active:route.name==='access-nodes'}" :aria-current="route.name==='access-nodes' ? 'page' : undefined" @click="navigate('/platform/access-nodes')"><AppIcon name="connection"/>设备接入</button>
+        </template>
         <template v-for="group in groups" :key="group">
           <div class="nav-caption roadmap-caption">{{ group }}</div>
           <button v-for="menu in menus.filter(menu=>menu.group===group)" :key="menu.code" class="nav-item" :class="{active:route.meta.permission===menu.code}" :aria-current="route.meta.permission===menu.code ? 'page' : undefined" @click="navigate(navigationPath(menu))"><AppIcon :name="menu.path.startsWith('/catalog/') ? 'device' : menu.path.startsWith('/access/') ? 'user' : 'shield'"/>{{ menu.name }}</button>

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onScopeDispose, ref, watch } from 'vue'
+import { computed, onScopeDispose, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { catalogApi, catalogScope, resourceScope, type Credential, type DeviceDetail, type EventSnapshot } from '../api/catalog'
+import { catalogApi, catalogScope, resourceScope, type Credential, type DeviceDetail } from '../api/catalog'
 import { snapshotRefresh } from '../realtime/snapshotRefresh'
 import { useDeviceSubscription,readPresence } from '../realtime/deviceSubscription'
 import { errorMessage, isCancelled } from '../api/management'
@@ -13,10 +13,11 @@ import DeviceShadowPanel from '../components/DeviceShadowPanel.vue'
 import DeviceCapabilitiesPanel from '../components/DeviceCapabilitiesPanel.vue'
 import DeviceCommandPanel from '../components/DeviceCommandPanel.vue'
 import DeviceLivePanel from '../components/DeviceLivePanel.vue'
+import DeviceHistoryPanel from '../components/DeviceHistoryPanel.vue'
 
 const route=useRoute(), router=useRouter(), session=useSessionStore()
 const scope=catalogScope(route.meta.catalogPlatform===true,route.params.tenantId), id=String(route.params.id)
-const detail=ref<DeviceDetail|null>(null), eventRows=ref<EventSnapshot[]>([]), eventsLoading=ref(false), eventsError=ref(''), eventsLoaded=ref(false), loading=ref(true), error=ref(''), actionError=ref(''), busy=ref(false), credential=ref<Credential|null>(null)
+const detail=ref<DeviceDetail|null>(null), loading=ref(true), error=ref(''), actionError=ref(''), busy=ref(false), credential=ref<Credential|null>(null)
 const editName=ref(''), editLifecycle=ref(''), activeTab=ref('overview')
 const life=new AbortController()
 const presence=ref('UNKNOWN')
@@ -34,9 +35,7 @@ const canCredential=computed(()=>session.can('device:credential'))
 const states=[{value:'ACTIVE',label:'启用'},{value:'DISABLED',label:'停用'},{value:'RETIRED',label:'退役'}]
 const stateName=(v:string)=>states.find(s=>s.value===v)?.label||v
 const stateType=(v:string)=>v==='ACTIVE'?'success':v==='DISABLED'?'warning':v==='RETIRED'?'info':'primary'
-async function load(){loading.value=true;error.value='';eventsLoaded.value=false;try{const result=await catalogApi.detail(scope,id,life.signal);detail.value=result;presenceRefresh.schedule();editName.value=result.device.name;editLifecycle.value=result.device.lifecycle;if(activeTab.value==='events')void loadEvents()}catch(e){if(!isCancelled(e))error.value=errorMessage(e)}finally{loading.value=false}}
-async function loadEvents(){if(eventsLoading.value)return;eventsLoading.value=true;eventsError.value='';try{eventRows.value=(await catalogApi.runtime(scope,id,life.signal)).events;eventsLoaded.value=true}catch(e){if(!isCancelled(e))eventsError.value=errorMessage(e)}finally{eventsLoading.value=false}}
-watch(activeTab,tab=>{if(tab==='events'&&!eventsLoaded.value)void loadEvents()})
+async function load(){loading.value=true;error.value='';try{const result=await catalogApi.detail(scope,id,life.signal);detail.value=result;presenceRefresh.schedule();editName.value=result.device.name;editLifecycle.value=result.device.lifecycle}catch(e){if(!isCancelled(e))error.value=errorMessage(e)}finally{loading.value=false}}
 async function save(){if(!detail.value||busy.value||!canWrite.value)return;busy.value=true;actionError.value='';try{const result=await catalogApi.updateDevice(scope,{...detail.value.device,name:editName.value,lifecycle:editLifecycle.value},life.signal);detail.value.device=result;editName.value=result.name;editLifecycle.value=result.lifecycle;ElMessage.success('设备信息已保存')}catch(e){if(!isCancelled(e))actionError.value=errorMessage(e)}finally{busy.value=false}}
 async function remove(){if(!detail.value||busy.value||!canWrite.value||detail.value.device.lifecycle!=='DISABLED')return;try{await ElMessageBox.confirm(`确定删除设备“${detail.value.device.name}”？删除后设备身份、凭证和管理记录将无法从设备列表恢复。`,'删除设备',{confirmButtonText:'删除设备',cancelButtonText:'取消',type:'warning'})}catch{return}busy.value=true;actionError.value='';try{await catalogApi.removeDevice(scope,detail.value.device,life.signal);ElMessage.success('设备已删除');await router.push(resourceScope(scope,detail.value.device)+'/devices')}catch(e){if(!isCancelled(e))actionError.value=errorMessage(e)}finally{busy.value=false}}
 async function viewCredential(){if(!detail.value||busy.value)return;busy.value=true;actionError.value='';try{credential.value=await catalogApi.credential(scope,detail.value.device,life.signal)}catch(e){if(!isCancelled(e))actionError.value=errorMessage(e)}finally{busy.value=false}}
@@ -51,12 +50,13 @@ onScopeDispose(()=>{life.abort();presenceRefresh.dispose()}); void load()
     <div class="page-heading device-heading"><div><p class="eyebrow">DEVICE DETAIL / {{detail.device.code}}</p><h1>{{detail.device.name}}</h1><p>{{detail.product.name}} · 模型 {{detail.device.modelVersion}} · <el-tag :type="stateType(detail.device.lifecycle)" effect="plain">{{stateName(detail.device.lifecycle)}}</el-tag></p></div><div class="device-heading-actions"><el-button @click="router.push(resourceScope(scope,detail.device)+'/devices')">返回设备列表</el-button><el-button v-if="canCredential" :disabled="busy" @click="viewCredential">查看凭证</el-button><el-button v-if="canCredential&&detail.device.lifecycle!=='RETIRED'" :disabled="busy" @click="rotate">轮换凭证</el-button></div></div>
     <el-alert v-if="actionError" :title="actionError" type="error" :closable="false" class="detail-alert"/>
     <section class="device-hero panel"><div class="device-avatar">{{detail.device.name.slice(0,1).toUpperCase()}}</div><div><p class="eyebrow">IDENTITY</p><h2>{{detail.device.code}}</h2><p class="muted">设备 ID：<span class="mono">{{detail.device.id}}</span></p></div><div class="device-hero-stat"><span>凭证轮换序号</span><strong>v{{detail.device.credentialVersion}}</strong></div><div class="device-hero-stat"><span>接入状态</span><strong :class="{'status-muted':presence!=='ONLINE'}">{{presence==='ONLINE'?'在线':presence==='OFFLINE'?'离线':'未知'}}</strong></div></section>
-    <section class="panel device-detail-panel"><el-tabs v-model="activeTab"><el-tab-pane name="overview" label="设备概览"/><el-tab-pane name="state" label="设备状态"/><el-tab-pane name="call" label="模拟功能调用"/><el-tab-pane v-if="session.can('video:watch')" name="live" label="音视频直播"/><el-tab-pane name="events" label="事件列表"/><el-tab-pane name="capability" label="能力模型"/><el-tab-pane name="management" label="生命周期管理"/></el-tabs>
+    <section class="panel device-detail-panel"><el-tabs v-model="activeTab"><el-tab-pane name="overview" label="设备概览"/><el-tab-pane name="state" label="设备状态"/><el-tab-pane name="history" label="设备历史"/><el-tab-pane name="call" label="模拟功能调用"/><el-tab-pane v-if="session.can('video:watch')" name="live" label="音视频直播"/><el-tab-pane name="events" label="事件列表"/><el-tab-pane name="capability" label="能力模型"/><el-tab-pane name="management" label="生命周期管理"/></el-tabs>
       <div v-if="activeTab==='overview'" class="device-overview"><div><h2>身份信息</h2><dl class="detail-grid"><div><dt>设备名称</dt><dd>{{detail.device.name}}</dd></div><div><dt>设备编码</dt><dd class="mono">{{detail.device.code}}</dd></div><div><dt>所属产品</dt><dd>{{detail.product.name}} <span class="muted">({{detail.product.code}})</span></dd></div><div><dt>当前绑定模型版本</dt><dd>{{detail.model.version}}</dd></div><div><dt>数据归属</dt><dd>{{detail.device.tenantId||'平台目录'}}</dd></div><div><dt>编辑修订号</dt><dd>revision {{detail.device.revision}}</dd></div></dl></div></div>
       <DeviceShadowPanel v-else-if="activeTab==='state'" :scope="scope" :device="detail.device" :model="detail.model.model" :writable="canWrite&&detail.product.enabled"/>
+      <DeviceHistoryPanel v-else-if="activeTab==='history'" :scope="scope" :device="detail.device" :model="detail.model.model"/>
       <DeviceCommandPanel v-else-if="activeTab==='call'" :scope="scope" :device="detail.device" :model="detail.model.model" :writable="canWrite&&detail.product.enabled"/>
       <DeviceLivePanel v-else-if="activeTab==='live'&&session.can('video:watch')" :device="detail.device" :enabled="detail.device.lifecycle==='ACTIVE'&&detail.product.enabled"/>
-      <div v-else-if="activeTab==='events'" class="runtime-view"><div class="section-heading"><div><h2>事件列表</h2></div><el-button :disabled="eventsLoading" @click="loadEvents">刷新</el-button></div><el-skeleton v-if="eventsLoading" :rows="4" animated/><StatePanel v-else-if="eventsError" title="事件加载失败" :description="eventsError"><el-button @click="loadEvents">重试</el-button></StatePanel><el-table v-else :data="eventRows" empty-text="当前物模型没有事件"><el-table-column prop="id" label="事件" min-width="180"/><el-table-column prop="status" label="状态" width="140"/><el-table-column prop="receivedAt" label="最近接收时间" width="180"/><el-table-column prop="payload" label="内容" min-width="220"/></el-table></div>
+      <DeviceHistoryPanel v-else-if="activeTab==='events'" :scope="scope" :device="detail.device" :model="detail.model.model" initial-kind="EVENT" event-only/>
       <DeviceCapabilitiesPanel v-else-if="activeTab==='capability'" :detail="detail" :scope="scope"/>
       <div v-else class="management-view"><div class="section-heading"><div><h2>生命周期管理</h2><p>停用后可删除设备。</p></div><div class="management-actions"><el-button v-if="canWrite" type="primary" :loading="busy" :disabled="!editName.trim()" @click="save">保存修改</el-button><el-button v-if="canWrite&&detail.device.lifecycle==='DISABLED'" type="danger" plain :loading="busy" @click="remove">删除设备</el-button></div></div><div class="management-form"><label>设备名称</label><el-input v-model="editName" maxlength="100" :disabled="!canWrite||busy"/><label>生命周期</label><el-select v-model="editLifecycle" :disabled="!canWrite||busy"><el-option v-for="state in states" :key="state.value" :label="state.label" :value="state.value"/></el-select></div></div>
     </section>

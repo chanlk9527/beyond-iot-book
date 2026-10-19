@@ -1,0 +1,27 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { documents, downloads, searchDocuments } from '../developer/resources'
+import { renderDocument } from '../developer/markdown'
+const route = useRoute(), router = useRouter(), query = ref('')
+const current = computed(() => documents.find(doc => doc.id === (route.params.slug || 'getting-started')))
+const results = computed(() => searchDocuments(query.value))
+const rendered = computed(() => current.value ? renderDocument(current.value.content, current.value.source) : null)
+function followLink(event: MouseEvent) {
+  if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return
+  const anchor = (event.target as HTMLElement).closest('a')
+  const href = anchor?.getAttribute('href')
+  if (href?.startsWith('/developer/')) { event.preventDefault(); void router.push(href) }
+}
+</script>
+<template>
+  <div class="developer-docs-grid">
+    <aside class="developer-docs-nav"><label for="developer-search">搜索开发资料</label><input id="developer-search" v-model="query" type="search" placeholder="如：令牌、MQTT、凭证" /><span class="developer-result-count" aria-live="polite">{{ query.trim() ? `找到 ${results.length} 篇资料` : '文档目录' }}</span><nav aria-label="文档目录"><RouterLink v-for="doc in results" :key="doc.id" :to="`/developer/docs/${doc.id}`" :class="{selected:current?.id === doc.id}"><small>{{ doc.group }}</small>{{ doc.title }}</RouterLink><p v-if="!results.length">没有匹配的资料，请换一个关键词。</p></nav><div class="developer-download-links"><a v-for="item in downloads" :key="item.filename" :href="item.url" :download="item.filename">↓ {{ item.title }}</a></div></aside>
+    <article v-if="current && rendered" class="developer-article"><p class="developer-doc-category">{{ current.group }}</p><div class="developer-markdown" @click="followLink" v-html="rendered.html"></div><footer>资料来自项目仓库，与接口实现一同维护。</footer></article>
+    <article v-else class="developer-article"><h1>文档不存在</h1><p>请从左侧目录选择资料。</p><RouterLink to="/developer/docs">返回接入指南</RouterLink></article>
+    <aside v-if="rendered" class="developer-toc"><strong>本页目录</strong><a v-for="heading in rendered.headings.filter(h=>h.level === 2)" :key="heading.id" :href="`#${heading.id}`">{{ heading.text }}</a></aside>
+  </div>
+</template>
+<style scoped>
+.developer-docs-grid{display:grid;grid-template-columns:220px minmax(0,1fr) 170px;gap:28px;align-items:start}.developer-docs-nav{position:sticky;top:24px}.developer-docs-nav label{display:block;font-size:14px;font-weight:600;margin-bottom:10px}.developer-docs-nav input{width:100%;padding:12px;border:1px solid #ccd5e0;border-radius:8px;background:white;font:inherit;font-size:13px;box-sizing:border-box}.developer-result-count{display:block;font-size:12px;color:#6b7c90;margin:20px 0 10px}.developer-docs-nav nav{display:grid;gap:4px}.developer-docs-nav nav a{padding:12px;text-decoration:none;color:#43556d;font-size:14px;border-radius:8px}.developer-docs-nav nav a.selected{background:#e5efe9;color:#176b57;font-weight:600}.developer-docs-nav small{display:block;font-size:11px;margin-bottom:5px;color:#78899b}.developer-download-links{display:grid;gap:12px;border-top:1px solid #dce4ec;margin-top:24px;padding-top:20px}.developer-download-links a{color:#176b57;font-size:13px}.developer-article{background:white;border:1px solid #e3e9f0;border-radius:12px;padding:32px;min-width:0}.developer-doc-category{font-size:12px;color:#176b57;margin:0}.developer-article footer{border-top:1px solid #e3e9f0;margin-top:32px;padding-top:20px;font-size:12px;color:#7c8a99}.developer-toc{position:sticky;top:24px;font-size:12px;display:grid;gap:14px;max-height:85vh;overflow-y:auto}.developer-toc strong{color:#24394f}.developer-toc a{color:#62758b;line-height:1.6;text-decoration:none}.developer-markdown{font-size:14px;line-height:1.9;color:#3b4d63;overflow-wrap:anywhere}.developer-markdown :deep(h1){font-size:28px;line-height:1.5;color:#172437;margin:12px 0 24px}.developer-markdown :deep(h2){font-size:21px;color:#172437;margin:32px 0 16px;padding-top:8px;scroll-margin-top:24px}.developer-markdown :deep(h3){font-size:16px;color:#24394f;margin-top:24px;scroll-margin-top:24px}.developer-markdown :deep(a){color:#176b57}.developer-markdown :deep(pre){background:#f1f5f8;padding:18px;border-radius:8px;overflow:auto;font-size:12px;line-height:1.7}.developer-markdown :deep(code){font-family:ui-monospace,Consolas,monospace}.developer-markdown :deep(p code),.developer-markdown :deep(td code){background:#edf2f6;padding:2px 4px;border-radius:4px}.developer-markdown :deep(table){display:block;overflow-x:auto;border-collapse:collapse;font-size:13px;margin:20px 0}.developer-markdown :deep(th),.developer-markdown :deep(td){border:1px solid #dce4ec;padding:10px 12px;text-align:left;min-width:90px}.developer-markdown :deep(th){background:#f1f5f8}.developer-markdown :deep(blockquote){border-left:3px solid #93b6a7;margin:16px 0;padding-left:16px}.developer-markdown :deep(li){margin:6px 0}@media(max-width:1100px){.developer-docs-grid{grid-template-columns:210px minmax(0,1fr)}.developer-toc{display:none}}@media(max-width:720px){.developer-docs-grid{grid-template-columns:1fr;gap:20px}.developer-docs-nav{position:static}.developer-docs-nav nav{grid-template-columns:repeat(2,minmax(0,1fr))}.developer-download-links{display:flex;flex-wrap:wrap}.developer-article{padding:22px}.developer-markdown :deep(h1){font-size:24px}}
+</style>

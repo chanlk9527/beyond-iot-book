@@ -20,6 +20,7 @@
   - [2.3 两条链路看懂平台怎样工作](manuscript/part-01-iot-platform/02-nebula-iot-platform/2.3-data-and-control-flows.md)
   - [2.4 同一套平台怎样运行在不同环境](manuscript/part-01-iot-platform/02-nebula-iot-platform/2.4-deployment-models.md)
   - [2.5 平台设计的基本原则](manuscript/part-01-iot-platform/02-nebula-iot-platform/2.5-design-principles.md)
+  - [2.6 IoT 能力开放平台：让外部系统安全使用设备能力](manuscript/part-01-iot-platform/02-nebula-iot-platform/2.6-open-capability-platform.md)
 
 ## 第二部分：建立 IoT Core 的领域骨架
 

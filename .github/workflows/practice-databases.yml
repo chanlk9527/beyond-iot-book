@@ -1,0 +1,50 @@
+name: Practice database compatibility
+on:
+  pull_request:
+    paths: ["practice/backend/**", "practice/infra/**", ".github/workflows/practice-databases.yml"]
+  push:
+    paths: ["practice/backend/**", "practice/infra/**", ".github/workflows/practice-databases.yml"]
+  workflow_dispatch:
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        database: [postgresql, mysql]
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: nebula_test
+          POSTGRES_USER: nebula
+          POSTGRES_PASSWORD: compatibility-test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U nebula -d nebula_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: nebula_test
+          MYSQL_USER: nebula
+          MYSQL_PASSWORD: compatibility-test
+          MYSQL_ROOT_PASSWORD: compatibility-root-test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pcompatibility-root-test"
+          --health-interval 5s --health-timeout 3s --health-retries 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: practice/backend/**/pom.xml
+      - name: Run migrations and catalog HTTP/MQTT compatibility suite
+        working-directory: practice/backend
+        env:
+          DATABASE_TEST_URL: ${{ matrix.database == 'mysql' && 'jdbc:mysql://127.0.0.1:3306/nebula_test?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true' || 'jdbc:postgresql://127.0.0.1:5432/nebula_test' }}
+          DATABASE_TEST_USERNAME: nebula
+          DATABASE_TEST_PASSWORD: compatibility-test
+        run: mvn -B -ntp -s .mvn/settings-central.xml -pl platform-bootstrap -am -Pdatabase-compatibility verify

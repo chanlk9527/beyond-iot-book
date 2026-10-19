@@ -2,16 +2,18 @@
 import {computed,onScopeDispose,ref,watch} from 'vue'
 import {onBeforeRouteLeave,onBeforeRouteUpdate,useRoute,useRouter} from 'vue-router'
 import {ElMessage,ElMessageBox} from 'element-plus'
-import {catalogApi,catalogScope,warmerModel,type Product,type ModelVersion} from '../api/catalog'
+import {catalogApi,catalogScope,resourceScope,warmerModel,type Product,type ModelVersion} from '../api/catalog'
 import {errorMessage,isCancelled} from '../api/management'
 import {useSessionStore} from '../stores/session'
 import CatalogNavigation from '../components/CatalogNavigation.vue'
 import StatePanel from '../components/StatePanel.vue'
 import ThingModelEditor from '../components/ThingModelEditor.vue'
 import ProductConfigurationForm from '../components/ProductConfigurationForm.vue'
+import ProductDataPolicy from '../components/ProductDataPolicy.vue'
 import DevicesView from './DevicesView.vue'
 import {productChanges,productTabPayload,type ProductEditTab} from '../components/productTabs'
 import {stableModel,modelCounts,modelDiff,emptyModel} from '../components/modelVersions'
+import {defaultDataRule,defaultEventRule,eventRuleSummary} from '../components/dataPolicy'
 const route=useRoute(),router=useRouter(),session=useSessionStore()
 let scope=catalogScope(route.meta.catalogPlatform===true,route.params.tenantId),id=String(route.params.id)
 const writable=computed(()=>!!session.account?.platformAdmin||(route.meta.catalogPlatform!==true&&['OWNER','ADMIN'].includes((session.tenant?.id===route.params.tenantId?session.tenant.role:undefined)||'')))
@@ -19,12 +21,32 @@ const editable=computed(()=>writable.value&&session.can('product:write'))
 const saved=ref<Product|null>(null),product=ref<Product|null>(null),versions=ref<ModelVersion[]>([])
 const publishedSnapshot=ref<{version:string;model:Product['draft']}|null>(null)
 const loading=ref(true),error=ref(''),actionError=ref(''),busy=ref(false),modelText=ref(''),showModel=ref(false),publishedText=ref(''),publishedVersion=ref('')
-const tabs=computed(()=>[{id:'basic',name:'基本信息'},{id:'access',name:'设备接入'},{id:'model',name:'物模型'},{id:'devices',name:'设备列表'},{id:'versions',name:'版本管理'}].filter(tab=>tab.id!=='devices'||session.can('page:devices')))
+const tabs=computed(()=>[{id:'basic',name:'基本信息'},{id:'access',name:'设备接入'},{id:'model',name:'物模型'},{id:'data',name:'数据策略'},{id:'devices',name:'设备列表'},{id:'versions',name:'版本管理'}].filter(tab=>tab.id!=='devices'||session.can('page:devices')))
 const active=computed({get:()=>tabs.value.some(t=>t.id===route.query.tab)?String(route.query.tab):'basic',set:(tab:string)=>{void router.replace({query:{...route.query,tab}})}})
 const devicesVisited=ref(false)
-watch(active,tab=>{if(tab==='devices')devicesVisited.value=true})
+const dataPolicyVisited=ref(false)
+watch(active,tab=>{if(tab==='devices')devicesVisited.value=true;if(tab==='data'||tab==='model')dataPolicyVisited.value=true},{immediate:true})
 const changes=computed(()=>product.value&&saved.value?productChanges(saved.value,product.value,modelText.value):{basic:false,access:false,model:false})
-const dirty=computed(()=>Object.values(changes.value).some(Boolean))
+const dataPolicyDirty=ref(false)
+const policyBusy=ref(false)
+const policyEditor=ref<InstanceType<typeof ProductDataPolicy>|null>(null)
+function eventPolicy(id:string){
+ const rule=policyEditor.value?.effectiveEvent(id)||defaultEventRule()
+ let definition:unknown
+ try{definition=JSON.parse(modelText.value).events?.[id]}catch{/* Invalid model is handled by the editor. */}
+ return {pending:!saved.value||!Object.hasOwn(saved.value.draft.events,id)||JSON.stringify(definition)!==JSON.stringify(saved.value.draft.events[id]),summary:eventRuleSummary(rule),source:policyEditor.value?.isEventCustom(id)?'单独设置':'继承事件默认'}
+}
+function propertyPolicy(id:string){
+ const rule=policyEditor.value?.effective(id)||defaultDataRule()
+ let definition:unknown
+ try{definition=JSON.parse(modelText.value).properties?.[id]}catch{/* Invalid model is handled by the editor. */}
+ const pending=!saved.value||!Object.hasOwn(saved.value.draft.properties,id)||JSON.stringify(definition)!==JSON.stringify(saved.value.draft.properties[id])
+ const history=rule.history==='none'?'不存历史':rule.history==='time'?`历史 ${rule.days} 天`:`最近 ${rule.count} 条`
+ const numeric=['INTEGER','DECIMAL'].includes((definition as {schema?:{type?:string}})?.schema?.type||'')
+ return {pending,summary:`${rule.latest?'保留最新值':'不保留最新值'} · ${history}`,source:policyEditor.value?.isCustom(id)?'单独设置':'继承产品默认',statistics:rule.aggregate&&numeric?`小时统计 ${rule.aggregateDays} 天`:''}
+}
+const dataPolicyKey=computed(()=>JSON.stringify(['nebula:product-data-preview:v1',session.account?.id,saved.value?.tenantId,saved.value?.id]))
+const dirty=computed(()=>dataPolicyDirty.value||Object.values(changes.value).some(Boolean))
 const latestModel=computed(()=>versions.value.find(v=>v.version===saved.value?.latestVersion)||(publishedSnapshot.value?.version===saved.value?.latestVersion?publishedSnapshot.value:null))
 const draftPublished=computed(()=>!!latestModel.value&&stableModel(latestModel.value.model)===stableModel(saved.value?.draft))
 const draftStatus=computed(()=>changes.value.model?'有未保存修改':draftPublished.value?'已保存 · 与最新发布版一致':'已保存 · 尚未发布')
@@ -53,7 +75,7 @@ async function publish(){
 async function refreshVersions(){if(busy.value)return;busy.value=true;actionError.value='';try{versions.value=await catalogApi.models(scope,id,life.signal)}catch(e){if(!isCancelled(e))actionError.value=errorMessage(e)}finally{busy.value=false}}
 async function status(){if(!saved.value||busy.value)return;busy.value=true;actionError.value='';try{const p=await catalogApi.status(scope,saved.value,life.signal);saved.value=clone(p);if(product.value){product.value.enabled=p.enabled;product.value.revision=p.revision}ElMessage.success('产品状态已更新')}catch(e){if(!isCancelled(e))actionError.value=errorMessage(e)}finally{busy.value=false}}
 async function remove(){if(!saved.value||saved.value.enabled||busy.value)return;busy.value=true;actionError.value='';try{try{await ElMessageBox.confirm(`确定删除产品“${saved.value.name}”及其全部物模型版本？删除后无法恢复，产品下有设备时无法删除。${dirty.value?'未保存的修改也将丢失。':''}`,'删除产品',{confirmButtonText:'删除产品',cancelButtonText:'取消',type:'warning'})}catch{return}await catalogApi.remove(scope,saved.value,life.signal);product.value=null;saved.value=null;busy.value=false;ElMessage.success('产品已删除');await router.push(`${scope}/products`)}catch(e){if(!isCancelled(e))actionError.value=errorMessage(e)}finally{busy.value=false}}
-async function canLeave(){if(busy.value)return false;if(!dirty.value)return true;try{await ElMessageBox.confirm('还有未保存的修改，离开后将丢失。是否离开？','未保存的修改',{confirmButtonText:'离开',cancelButtonText:'继续编辑',type:'warning'});return true}catch{return false}}
+async function canLeave(){if(busy.value||policyBusy.value)return false;if(!dirty.value)return true;try{await ElMessageBox.confirm('还有未保存的修改，离开后将丢失。是否离开？','未保存的修改',{confirmButtonText:'离开',cancelButtonText:'继续编辑',type:'warning'});return true}catch{return false}}
 onBeforeRouteLeave(canLeave)
 onBeforeRouteUpdate(async(to,from)=>{if(to.path!==from.path)return canLeave();return true})
 function unload(e:BeforeUnloadEvent){if(dirty.value){e.preventDefault();e.returnValue=''}}
@@ -70,17 +92,23 @@ void load()
 <section v-else-if="product&&saved" class="panel product-detail-tabs">
 <el-alert v-if="actionError" :title="actionError" type="error" :closable="false"/>
 <el-tabs v-model="active">
-<el-tab-pane v-for="tab in tabs" :key="tab.id" :name="tab.id"><template #label>{{tab.name}}<span v-if="changes[tab.id as ProductEditTab]" class="unsaved-dot" aria-label="有未保存修改"> ●</span></template></el-tab-pane>
+<el-tab-pane v-for="tab in tabs" :key="tab.id" :name="tab.id"><template #label>{{tab.name}}<span v-if="tab.id==='data'?dataPolicyDirty:changes[tab.id as ProductEditTab]" class="unsaved-dot" aria-label="有未保存修改"> ●</span></template></el-tab-pane>
 </el-tabs>
 <div v-show="active==='basic'" class="tenant-form"><h2>基本信息</h2><dl class="detail-grid"><div><dt>产品编码</dt><dd>{{product.code}}</dd></div><div><dt>产品 ID</dt><dd class="mono">{{product.id}}</dd></div></dl><label for="edit-product-name">产品名称（必填）</label><el-input id="edit-product-name" v-model="product.name" aria-required="true" maxlength="100" :disabled="busy||!editable"/><label>产品描述（选填）</label><el-input v-model="product.description" type="textarea" maxlength="1000" aria-label="产品描述" :disabled="busy||!editable"/><ProductConfigurationForm v-model="product.configuration" section="basic" :disabled="busy||!editable"/><div class="tenant-form-actions"><el-button v-if="editable" type="primary" :disabled="!changes.basic||!product.name.trim()" :loading="busy" @click="save('basic')">保存基本信息</el-button></div></div>
 <div v-show="active==='access'"><h2>设备接入</h2><ProductConfigurationForm v-model="product.configuration" section="access" :disabled="busy||!editable"/><div class="tenant-form-actions"><el-button v-if="editable" type="primary" :disabled="!changes.access" :loading="busy" @click="save('access')">保存设备接入</el-button></div></div>
 <div v-show="active==='model'">
  <div class="section-heading"><div><h2>物模型草稿 <el-tag :type="changes.model?'warning':draftPublished?'success':'info'">{{draftStatus}}</el-tag></h2><p>最新发布版：{{saved.latestVersion||'尚无'}}。保存只更新草稿，发布后才能供新设备选择。</p></div><el-button v-if="editable" :disabled="busy" @click="modelText=JSON.stringify(warmerModel,null,2)">填入暖奶器示例</el-button></div>
- <ThingModelEditor v-model="modelText" :disabled="busy||!editable"/>
+ <div class="model-policy-context"><div><strong>模型定义与数据记录，一起配置</strong><p>在属性或事件行调整保留策略；两类默认策略分别管理，保存后对后续上报生效，无需发布物模型。</p></div><el-button :disabled="busy" @click="active='data'">管理产品默认策略</el-button></div>
+ <ThingModelEditor v-model="modelText" :disabled="busy||!editable">
+  <template #data-policy="{propertyId}"><div class="model-property-policy"><span>{{propertyPolicy(propertyId).summary}}</span><small>{{propertyPolicy(propertyId).source}}<template v-if="propertyPolicy(propertyId).statistics"> · {{propertyPolicy(propertyId).statistics}}</template></small><el-button v-if="!propertyPolicy(propertyId).pending" link type="primary" :disabled="busy||policyBusy||!editable" :aria-label="`配置 ${propertyId} 数据策略`" @click="policyEditor?.edit(propertyId)">配置策略</el-button><small v-else class="model-policy-pending">请先保存此属性定义，再配置策略</small></div></template>
+  <template #event-policy="{eventId}"><div class="model-property-policy"><span>{{eventPolicy(eventId).summary}}</span><small>{{eventPolicy(eventId).source}}</small><el-button v-if="!eventPolicy(eventId).pending" link type="primary" :disabled="busy||policyBusy||!editable" :aria-label="`配置 ${eventId} 事件策略`" @click="policyEditor?.editEvent(eventId)">配置策略</el-button><small v-else class="model-policy-pending">请先保存此事件定义，再配置策略</small></div></template>
+ </ThingModelEditor>
+ <div v-if="dataPolicyDirty" class="model-policy-save"><div><strong>数据策略有未保存修改</strong><p>与“数据策略”页签同步；保存物模型草稿不会保存这里的修改。</p></div><div><el-button :disabled="busy||policyBusy||!editable" @click="policyEditor?.restore()">撤销策略修改</el-button><el-button type="primary" :loading="policyBusy" :disabled="busy||policyBusy||!editable||!policyEditor?.valid" @click="policyEditor?.save()">保存数据策略</el-button></div></div>
  <div class="tenant-form-actions"><el-button v-if="editable" type="primary" :disabled="!changes.model" :loading="busy" @click="save('model')">保存物模型草稿</el-button><el-button v-if="writable&&session.can('product:publish')" :disabled="!canPublish" :loading="busy" @click="publish">发布已保存草稿（自动编号）</el-button></div>
  <p class="muted">{{changes.model?'请先保存当前编辑内容，再发布。':draftPublished?'当前草稿已发布，无需重复发布。':'草稿已保存，发布时将生成下一个模型版本。'}}已有设备的模型绑定保持不变。</p>
 </div>
 <div v-if="devicesVisited" v-show="active==='devices'"><DevicesView v-if="session.can('page:devices')" :key="saved.id" :product="saved"/><StatePanel v-else title="暂无设备查看权限" description="请联系管理员授予设备读取权限。"/></div>
+<ProductDataPolicy v-if="active==='data'||active==='model'||dataPolicyVisited" v-show="active==='data'" ref="policyEditor" :key="dataPolicyKey" :model="saved.draft" :scope="resourceScope(scope,saved)" :product-id="saved.id" :disabled="busy||!editable" @dirty="dataPolicyDirty=$event" @busy="policyBusy=$event"/>
 <div v-show="active==='versions'">
  <div class="section-heading"><div><h2>已发布物模型版本</h2><p>最新发布版：{{saved.latestVersion||'尚无'}} · 草稿状态：{{draftStatus}}</p></div><el-button :disabled="busy" @click="active='model'">编辑物模型草稿</el-button></div>
  <p class="muted">版本号由系统按 v1、v2、v3 自动递增；版本内容不可覆盖。已有设备继续使用原绑定版本，固件升级与模型迁移后续提供。</p>
@@ -94,4 +122,7 @@ void load()
 </section>
 <el-dialog v-model="showModel" :title="'已发布物模型 '+publishedVersion+'（只读）'" width="min(760px,94vw)"><pre class="published-model">{{publishedText}}</pre></el-dialog>
 </template>
+<style scoped>
+.model-policy-context,.model-policy-save{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px;border:1px solid #dce9e3;border-radius:8px;background:#f3f8f5;margin:20px 0}.model-policy-context strong,.model-policy-save strong{font-size:13px;color:#426c5b}.model-policy-context p,.model-policy-save p{font-size:12px;color:#81968b;line-height:1.8;margin:6px 0 0}.model-property-policy{font-size:12px;line-height:1.7;padding:3px 0}.model-property-policy small{display:block;color:#8c9c94;font-size:11px}.model-property-policy .model-policy-pending{color:#a27e43}.model-policy-save{background:#fffaf0;border-color:#eee1bf}.model-policy-save>div:last-child{display:flex;gap:8px;flex-wrap:wrap}.model-policy-save .el-button+.el-button{margin:0}@media(max-width:800px){.model-policy-context,.model-policy-save{align-items:flex-start;flex-direction:column}}
+</style>
 <style scoped>.product-detail-tabs{padding:24px}.unsaved-dot{color:var(--el-color-warning)}.product-detail-tabs h2{margin:16px 0}.product-detail-tabs :deep(.page-heading h1){font-size:22px}.product-detail-tabs ol{line-height:2}.product-detail-tabs :deep(.tenant-context-info){margin-top:12px}</style>
