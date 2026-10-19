@@ -4,5 +4,5 @@
     <parent><groupId>com.nebula.iot</groupId><artifactId>nebula-platform-parent</artifactId><version>0.1.0-SNAPSHOT</version><relativePath>../pom.xml</relativePath></parent>
     <artifactId>platform-manager</artifactId>
     <packaging>pom</packaging>
-    <modules><module>identity-manager</module><module>tenant-manager</module><module>device-manager</module></modules>
+    <modules><module>identity-manager</module><module>tenant-manager</module><module>device-manager</module><module>video-manager</module></modules>
 </project>

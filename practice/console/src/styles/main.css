@@ -79,7 +79,8 @@ h1, h2, h3, p { margin: 0; }
 .login-bottom { display: flex; justify-content: space-between; gap: 20px; color: #a0adab; font-size: 10px; }
 .form-error { margin-top: 24px; }
 .console-shell { min-height: 100vh; display: flex; }
-.sidebar { width: 232px; position: fixed; inset: 0 auto 0 0; background: #122e33; color: #a7bec0; display: flex; flex-direction: column; padding: 30px 18px 22px; z-index: 30; }
+.sidebar { width: 232px; position: fixed; inset: 0 auto 0 0; background: #122e33; color: #a7bec0; display: flex; flex-direction: column; padding: 30px 18px 22px; z-index: 30; overflow-y: auto; overscroll-behavior-y: contain; }
+.sidebar > * { flex-shrink: 0; }
 .sidebar .brand { padding: 0 10px; }
 .sidebar-context { display: flex; align-items: center; gap: 9px; font-size: 11px; padding: 13px 12px; margin: 31px 0 25px; background: #1c3a3e; border: 1px solid #2b484b; border-radius: 7px; }
 .context-dot, .status-dot { display: inline-block; width: 6px; height: 6px; background: #4db097; border-radius: 50%; flex-shrink: 0; }

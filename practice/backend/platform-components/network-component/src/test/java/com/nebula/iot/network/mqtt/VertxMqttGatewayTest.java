@@ -166,13 +166,21 @@ class VertxMqttGatewayTest {
 
     @Test
     void newConnectionReplacesOldSessionWithoutBeingRemovedByItsCloseCallback() throws Exception {
+        var changes = new LinkedBlockingQueue<Boolean>();
+        gateway.setConnectionObserver((key, online) -> { assertEquals(A, key); changes.add(online); });
         var previous = connect("client-a", "a", PASSWORD);
+        assertEquals(true, changes.poll(2, TimeUnit.SECONDS));
         var replacement = connect("client-a", "a", PASSWORD);
         await(() -> !previous.client.isConnected());
         gateway.send(command(A, "c-reconnect", 30)).toCompletableFuture().get(5, TimeUnit.SECONDS);
         assertNotNull(replacement.messages.poll(2, TimeUnit.SECONDS));
         assertTrue(replacement.client.isConnected());
         assertEquals(1, gateway.sessionCount());
+        assertEquals(true, changes.poll(2, TimeUnit.SECONDS));
+        assertTrue(changes.isEmpty(), "Closing the old connection must not announce offline");
+        gateway.stop().toCompletableFuture().get(5, TimeUnit.SECONDS);
+        assertEquals(false, changes.poll(2, TimeUnit.SECONDS));
+        assertTrue(changes.isEmpty());
     }
 
     @Test

@@ -40,6 +40,15 @@ public final class VertxMqttGateway implements DeviceAccessGateway {
     private final Set<MqttEndpoint> connections = ConcurrentHashMap.newKeySet();
     private final AtomicLong acceptedMessages = new AtomicLong();
     private final AtomicLong rejectedMessages = new AtomicLong();
+    private volatile java.util.function.BiConsumer<DeviceKey, Boolean> connectionObserver = (key, online) -> { };
+    /** Observer must be non-blocking; installed by composition before starting the gateway. */
+    public void setConnectionObserver(java.util.function.BiConsumer<DeviceKey, Boolean> observer) {
+        connectionObserver = Objects.requireNonNull(observer);
+    }
+    private void connectionChanged(DeviceKey key, boolean online) {
+        try { connectionObserver.accept(key, online); }
+        catch (RuntimeException error) { System.getLogger(getClass().getName()).log(System.Logger.Level.ERROR, "Connection observer failed", error); }
+    }
     private volatile boolean running;
     private volatile MqttServer server;
     private volatile ExecutorService workers;
@@ -115,6 +124,7 @@ public final class VertxMqttGateway implements DeviceAccessGateway {
         connections.forEach(VertxMqttGateway::closeEndpoint);
         current.close().onComplete(ar -> {
             workers.shutdown();
+            List.copyOf(sessions.values()).forEach(session -> closeSession(session, new IllegalStateException("Gateway stopped")));
             sessions.clear();
             clientIds.clear();
             connections.clear();
@@ -196,6 +206,7 @@ public final class VertxMqttGateway implements DeviceAccessGateway {
         add(properties, SHARED_SUBSCRIPTION_AVAILABLE, 0);
         add(properties, SUBSCRIPTION_IDENTIFIER_AVAILABLE, 0);
         endpoint.accept(false, properties);
+        connectionChanged(key, true);
         if (previous != null) previous.context.runOnContext(ignored -> disconnect(previous, MqttDisconnectReasonCode.SESSION_TAKEN_OVER));
     }
 
@@ -347,11 +358,11 @@ public final class VertxMqttGateway implements DeviceAccessGateway {
         try { if (session.endpoint.isConnected()) session.endpoint.disconnect(reason, MqttProperties.NO_PROPERTIES); }
         finally { connections.remove(session.endpoint); closeEndpoint(session.endpoint); }
     }
-    private void closeSession(Session session, Throwable reason) {
+    private synchronized void closeSession(Session session, Throwable reason) {
         if (session.closed) return;
         session.closed = true;
         // 比较后删除，防止旧连接的关闭回调移除新会话。
-        sessions.remove(session.key, session);
+        if (sessions.remove(session.key, session)) connectionChanged(session.key, false);
         clientIds.remove(session.endpoint.clientIdentifier(), session);
         session.outgoing.values().forEach(pending -> { vertx.cancelTimer(pending.timer); pending.result.completeExceptionally(reason); });
         session.outgoing.clear();

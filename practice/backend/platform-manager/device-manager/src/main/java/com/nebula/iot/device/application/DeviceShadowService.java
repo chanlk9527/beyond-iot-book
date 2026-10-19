@@ -19,6 +19,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.server.ResponseStatusException;
 
 public final class DeviceShadowService {
+    private final org.springframework.context.ApplicationEventPublisher events;
     private final CatalogService catalog;
     private final CatalogRepository data;
     private final ThingModelCache models;
@@ -28,7 +29,8 @@ public final class DeviceShadowService {
     private final Supplier<DeviceShadowStore> stores;
 
     public DeviceShadowService(CatalogService catalog, CatalogRepository data, ThingModelCache models, AccountDirectory accounts,
-            TenantAccess tenants, ObjectMapper json, Supplier<DeviceShadowStore> stores) {
+            TenantAccess tenants, ObjectMapper json, Supplier<DeviceShadowStore> stores, org.springframework.context.ApplicationEventPublisher events) {
+        this.events = events;
         this.catalog = catalog; this.data = data; this.accounts = accounts; this.tenants = tenants;
         this.models = models;
         this.json = json; this.stores = stores;
@@ -55,6 +57,7 @@ public final class DeviceShadowService {
         if (current.version() != version) throw conflict();
         var next = current.withDesired(patch, Instant.now());
         if (!commit(key, version, next)) throw conflict();
+        changed(key, next);
         return next.view();
     }
     /** Only trusted, authenticated ingress calls this port; there is no management reported-state endpoint. */
@@ -80,7 +83,7 @@ public final class DeviceShadowService {
                 property.schema().validate(value);
                 values.put(id, toJson(value));
             });
-        } catch (java.io.IOException | IllegalArgumentException e) {
+        } catch (IllegalArgumentException e) {
             throw problem(HttpStatus.BAD_REQUEST, "Report does not match the bound model");
         }
         if (message.occurredAt().isAfter(message.receivedAt().plus(Duration.ofMinutes(5))))
@@ -88,9 +91,13 @@ public final class DeviceShadowService {
         for (int attempt = 0; attempt < 8; attempt++) {
             var current = readDocument(key, row.modelVersion());
             var next = current.withReport(values, message.messageId().value(), message.occurredAt(), message.receivedAt());
-            if (next == current || commit(key, current.version(), next)) return;
+            if (next == current) return;
+            if (commit(key, current.version(), next)) { changed(key, next); return; }
         }
         throw conflict();
+    }
+    private void changed(DeviceKey key, ShadowDocument doc) {
+        events.publishEvent(new DeviceStateChanged(key, doc.modelVersion(), doc.version()));
     }
     private void validateDesired(ModelSpec spec, Map<String, JsonNode> patch) {
         try {

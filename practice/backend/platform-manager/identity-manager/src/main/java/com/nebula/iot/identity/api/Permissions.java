@@ -20,6 +20,7 @@ public final class Permissions {
         new Definition("product:read","查看产品与物模型版本","产品与设备"),
         new Definition("product:write","创建及编辑产品草稿","产品与设备"),
         new Definition("product:publish","发布物模型版本及启停产品","产品与设备"),
+        new Definition("video:watch","观看设备直播","音视频"),
         new Definition("device:read","查看设备","产品与设备"),
         new Definition("device:write","登记及管理设备生命周期","产品与设备"),
         new Definition("device:credential","轮换设备凭证","产品与设备"),

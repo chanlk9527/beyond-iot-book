@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import * as api from '../api/management'
+import { closeDeviceSubscriptions } from '../realtime/deviceSubscription'
 import { hasPermission } from '../security/permissions'
 
 export const useSessionStore = defineStore('session', () => {
@@ -20,6 +21,7 @@ export const useSessionStore = defineStore('session', () => {
     revision++
     listRevision++
     api.cancelRequests()
+    closeDeviceSubscriptions()
     pending = undefined
     account.value = null
     tenant.value = null

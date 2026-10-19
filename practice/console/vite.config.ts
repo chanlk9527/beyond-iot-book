@@ -7,6 +7,7 @@ export default defineConfig(({ mode }) => {
     '/api/management': {
       target: env.API_PROXY_TARGET || 'http://127.0.0.1:8080',
       changeOrigin: false,
+      ws: true,
     },
   }
   return {

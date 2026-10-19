@@ -15,8 +15,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 @ConditionalOnProperty(name = "nebula.management.enabled", havingValue = "true")
 public class DeviceShadowConfiguration {
     @Bean DeviceShadowService deviceShadowService(CatalogService catalog, CatalogMapper data, com.nebula.iot.device.application.ThingModelCache models,
-            AccountDirectory accounts, TenantAccess tenants, ObjectMapper json, ObjectProvider<DeviceShadowStore> stores) {
-        return new DeviceShadowService(catalog, data, models, accounts, tenants, json, stores::getIfAvailable);
+            AccountDirectory accounts, TenantAccess tenants, ObjectMapper json, ObjectProvider<DeviceShadowStore> stores, org.springframework.context.ApplicationEventPublisher events) {
+        return new DeviceShadowService(catalog, data, models, accounts, tenants, json, stores::getIfAvailable, events);
     }
     @Bean
     @ConditionalOnProperty(name = "nebula.redis.enabled", havingValue = "true")

@@ -13,3 +13,11 @@
 - [前端使用说明](console/README.md)：开发、构建和部署。
 
 `backend/` 放 Java 代码，`console/` 放管理后台，`infra/` 放本地运行环境。书稿位于 `manuscript/`，阅读顺序由 `SUMMARY.md` 管理。进度以代码、测试和各入口文档为准，不再维护独立的计划副本。
+
+## 应用实时订阅
+
+管理端与后续 App 通过内置 EventBus 驱动的 WebSocket 订阅获取设备状态变化，详见[实时订阅架构与协议](REALTIME-SUBSCRIPTIONS.md)。当前已接入在线状态、属性影子变更与重连快照恢复。
+
+## 音视频直播
+
+设备详情提供基于标准 WebRTC 的观看入口，直播会话与媒体提供者分离，首个适配为 AWS KVS；默认关闭，需配置现有通道。管理端沿用账号／租户授权，App 授权未接入时拒绝访问。配置、接口与强制停流限制见 [直播模块](backend/platform-manager/video-manager/README.md)。

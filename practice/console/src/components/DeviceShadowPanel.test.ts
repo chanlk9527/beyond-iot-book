@@ -2,8 +2,10 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createApp, defineComponent, h, nextTick } from 'vue'
 import DeviceShadowPanel from './DeviceShadowPanel.vue'
+import { useDeviceSubscription } from '../realtime/deviceSubscription'
 import { catalogApi, type Device, type DeviceShadow } from '../api/catalog'
 
+vi.mock('../realtime/deviceSubscription',()=>({useDeviceSubscription:vi.fn(),readPresence:vi.fn(async()=>({state:'UNKNOWN'}))}))
 vi.mock('../api/catalog',async original=>({...await original<typeof import('../api/catalog')>(),catalogApi:{shadow:vi.fn(),desired:vi.fn()}}))
 vi.mock('element-plus',()=>({ElMessage:{success:vi.fn(),info:vi.fn()}}))
 let dispose:()=>void
@@ -51,3 +53,20 @@ it('aborts requests when leaving the shadow and shows a retry for storage failur
  expect(signal.aborted).toBe(true)
 })
 
+
+it('refreshes reported state without replacing edits or advancing the edit concurrency version',async()=>{
+ vi.useFakeTimers()
+ try {
+  const root=mount();await settle()
+  const checkbox=root.querySelector('input[type=checkbox]') as HTMLInputElement
+  checkbox.checked=false;checkbox.dispatchEvent(new Event('change'));await settle()
+  vi.mocked(catalogApi.shadow).mockResolvedValue({...snapshot(8),desired:{},delta:{}})
+  const receive=vi.mocked(useDeviceSubscription).mock.calls[0]![1]
+  receive({type:'invalidate',kind:'shadow',deviceId:'d1',tenantId:'ta'})
+  await vi.advanceTimersByTimeAsync(200);await settle()
+  expect(root.textContent).toContain('状态修订 #8')
+  expect((root.querySelector('input[type=checkbox]') as HTMLInputElement).checked).toBe(false)
+  button(root,'保存期望状态').click();await settle()
+  expect(catalogApi.desired).toHaveBeenCalledWith('/catalog/tenants/ta','d1',2,{power:null},expect.any(AbortSignal))
+ } finally { vi.useRealTimers() }
+})

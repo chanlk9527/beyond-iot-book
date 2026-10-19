@@ -4,6 +4,7 @@ import {createApp,defineComponent,h,nextTick} from 'vue'
 import DeviceDetailView from './DeviceDetailView.vue'
 import {catalogApi,defaultProductConfiguration,type DeviceDetail,type ModelSpec} from '../api/catalog'
 const context=vi.hoisted(()=>({push:vi.fn(),can:vi.fn(()=>true)}))
+vi.mock('../realtime/deviceSubscription',()=>({useDeviceSubscription:vi.fn(),readPresence:vi.fn(async()=>({state:'UNKNOWN'}))}))
 vi.mock('vue-router',()=>({useRoute:()=>({meta:{catalogPlatform:true},params:{id:'d1'}}),useRouter:()=>({push:context.push})}))
 vi.mock('../stores/session',()=>({useSessionStore:()=>({account:{platformAdmin:true},can:context.can})}))
 vi.mock('element-plus',()=>({ElMessage:{success:vi.fn()},ElMessageBox:{confirm:vi.fn()}}))

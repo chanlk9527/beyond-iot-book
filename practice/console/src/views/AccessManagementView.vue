@@ -127,8 +127,7 @@ void load()
 </script>
 <template>
   <div class="page-heading"><div><p class="eyebrow">IDENTITY / ACCESS CONTROL</p><h1>权限管理</h1><p>为用户分配角色，按角色配置可见菜单和可访问页面。</p></div><el-button :loading="loading" @click="load">刷新</el-button></div>
-  <section class="tenant-context-info"><div><strong>配置顺序：创建角色 → 勾选页面 → 为用户分配角色</strong><p>只需选择允许使用的页面，系统自动关联页面所需的接口权限。用户拥有多个角色时，可使用这些角色授权的全部页面。数据访问仍受所属租户和成员身份限制。</p></div></section>
-  <div class="access-tabs"><el-button v-for="item in accessPages.filter(item => session.can(item.code))" :key="item.code" :type="route.path === item.path ? 'primary' : 'default'" @click="router.push(item.path)">{{ item.name }}</el-button></div>
+    <div class="access-tabs"><el-button v-for="item in accessPages.filter(item => session.can(item.code))" :key="item.code" :type="route.path === item.path ? 'primary' : 'default'" @click="router.push(item.path)">{{ item.name }}</el-button></div>
   <section v-if="loading" class="panel tenant-context-loading"><el-skeleton :rows="5" animated /></section>
   <section v-else-if="error" class="panel"><StatePanel title="权限数据加载失败" :description="error"><el-button @click="load">重试</el-button></StatePanel></section>
   <section v-else class="panel tenant-section">

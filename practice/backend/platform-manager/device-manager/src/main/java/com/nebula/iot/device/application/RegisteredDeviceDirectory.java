@@ -9,6 +9,7 @@ import com.nebula.iot.device.api.DeviceConnectionDirectory;
 import com.nebula.iot.device.domain.CatalogRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.event.TransactionalEventListener;
 import java.nio.ByteBuffer;
 import java.nio.charset.*;
@@ -53,6 +54,7 @@ public class RegisteredDeviceDirectory implements DeviceConnectionDirectory {
     public void invalidate(String deviceId) { cache.invalidate(deviceId); }
     public void invalidateAll() { cache.invalidateAll(); }
     public com.nebula.iot.device.infrastructure.cache.ThreeLevelCache.CacheStats cacheStats() { return cache.stats(); }
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @TransactionalEventListener public void onCacheInvalidated(com.nebula.iot.device.api.DeviceConnectionDirectory.CacheInvalidated event) {
         if (event.all()) invalidateAll(); else invalidate(event.deviceId());
     }

@@ -9,6 +9,7 @@ const context=vi.hoisted(()=>({
  session:{account:{platformAdmin:false},tenant:{id:'tenant-a',role:'OWNER'},can:vi.fn(()=>true)},
  push:vi.fn(),
 }))
+vi.mock('../realtime/deviceSubscription',()=>({useDeviceSubscription:vi.fn(),readPresence:vi.fn(async()=>({state:'UNKNOWN'}))}))
 vi.mock('vue-router',()=>({useRoute:()=>context.route,useRouter:()=>({push:context.push})}))
 vi.mock('../stores/session',()=>({useSessionStore:()=>context.session}))
 vi.mock('element-plus',()=>({ElMessage:{success:vi.fn()}}))

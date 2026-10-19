@@ -4,7 +4,7 @@
 
 ## 构建与启动
 
-前后端一起开发时，优先使用 [管理端快捷启动](../STARTUP.md)：在 `practice/` 执行 `./Manage.ps1`，默认复用已有 JAR，不重复构建。修改后端代码后用 `./Manage.ps1 -Action Restart -Build`。
+前后端一起开发时，优先使用 [管理端快捷启动](../STARTUP.md)：在 `practice/` 执行 macOS 的 `./manage.sh` 或 Windows 的 `./Manage.ps1`，默认复用已有 JAR，不重复构建。修改后端代码后分别用 `./manage.sh restart --build` 或 `./Manage.ps1 -Action Restart -Build`。
 
 在本目录执行：
 
@@ -254,3 +254,7 @@ MQTT默认开启；management模式接入登记设备，缺少业务接收器时
 ## 本机文件视图
 
 透明加密可能造成进程级文件视图不同。若编译器找不到已生成类而javap可读，先排查执行环境。不要修改编码或固化本机JDK路径处理该现象。
+
+## 音视频直播
+
+`video-manager` 提供管理端直播观看授权、会话和平台信令；`media-component` 封装 AWS KVS WebRTC，通过配置启用。配置、IAM、API、App 授权接入边界及撤销限制见 [直播模块说明](platform-manager/video-manager/README.md)。

@@ -79,7 +79,7 @@ public class MqttGatewayConfiguration {
     @Bean
     VertxMqttGateway mqttGateway(Vertx mqttVertx, MqttAccessProperties properties,
             ObjectProvider<DeviceAccessResolver> resolvers,
-            ProtocolSupport protocol, ObjectProvider<DeviceMessageHandler> handlers, ObjectProvider<DeviceAccessGateway> gateways, EventBus eventBus, ObjectProvider<DeviceCommandService> commands) {
+            ProtocolSupport protocol, ObjectProvider<DeviceMessageHandler> handlers, ObjectProvider<DeviceAccessGateway> gateways, EventBus eventBus, ObjectProvider<DeviceCommandService> commands, ObjectProvider<com.nebula.iot.bootstrap.subscription.DevicePresence> presence) {
         var options = new MqttGatewayOptions(properties.host(), properties.port(), properties.maxConnections(),
                 properties.maxMessageBytes(), properties.maxInFlight(), properties.workerThreads(), properties.maxQueuedWork(),
                 properties.authenticationTimeout(), properties.processingTimeout(), properties.acknowledgementTimeout());
@@ -94,7 +94,9 @@ public class MqttGatewayConfiguration {
         var handler = new EventPublishingDeviceMessageHandler(message -> delegate.handle(message).thenRun(() -> commands.ifAvailable(service -> service.accept(message))), eventBus);
         var receiver = protocol instanceof OfficialMqttProtocol
                 ? new OfficialSystemMessageHandler(message -> gateways.getObject().send(message), handler, java.time.Clock.systemUTC()) : handler;
-        return new VertxMqttGateway(mqttVertx, options, authenticator, resolver, protocol.codec(Transport.MQTT), receiver);
+        var gateway = new VertxMqttGateway(mqttVertx, options, authenticator, resolver, protocol.codec(Transport.MQTT), receiver);
+        presence.ifAvailable(service -> gateway.setConnectionObserver(service::changed));
+        return gateway;
     }
 
     @Bean

@@ -1,5 +1,38 @@
 # 管理端快捷启动
 
+## macOS
+
+需要 Python 3、JDK 21、Maven 和 Node.js 24。可通过 Homebrew 安装：
+
+```bash
+brew install openjdk@21 maven node@24
+```
+
+`manage.sh` 自动查找 Apple Silicon 和 Intel Homebrew 的 JDK 21、Node.js 24，无需修改全局 Java 设置。先复制 `backend/.env.example` 为 `backend/.env.local`，填写 PostgreSQL 连接信息；配置按字面读取，不执行其中的 shell 内容。需要创建首个管理账号时，填写示例中的初始账号、密码和平台管理员开关。
+
+从仓库根目录执行：
+
+```bash
+# 首次构建、安装依赖并启动前后端
+./practice/manage.sh --build --install
+# 日常启动 / 状态 / 停止 / 重启
+./practice/manage.sh
+./practice/manage.sh status
+./practice/manage.sh stop
+./practice/manage.sh restart
+# Java 代码变更后重新构建
+./practice/manage.sh restart --build
+# 单独启动前端或后端
+./practice/manage.sh --frontend-only
+./practice/manage.sh --backend-only
+# 仅检查配置、工具、端口、产物
+./practice/manage.sh --validate-only
+```
+
+入口固定为 <http://127.0.0.1:5173> 和 <http://127.0.0.1:8080>；默认等待就绪 90 秒，可传 `--timeout 180`。后台进程在终端退出后继续运行，日志存于 `practice/.run/{backend,frontend}.log` 和对应 `.err.log`，macOS 进程记录为 `*.mac.json`。停止时校验 PID 和启动时间，只向本脚本创建的进程组发送信号；端口被其他进程占用时不会自动结束它。启动失败只停止本次创建的服务。后端使用独立 JAR 副本，避免重新构建影响正在运行的服务；历史副本保留在 `.run/backend-runtime/`，可在停止后手动清理。
+
+## Windows PowerShell
+
 需要 PowerShell 7、JDK 21、Maven 3.6.3+ 和 Node.js 24。在 `practice/` 目录执行；脚本内部使用绝对路径，也可以从仓库根目录运行 `./practice/Manage.ps1`。
 
 先复制 `backend/.env.example` 为 `backend/.env.local`，填写 PostgreSQL 配置。文件按 `KEY=value` 原样读取，不执行配置内容，不写入系统环境变量。

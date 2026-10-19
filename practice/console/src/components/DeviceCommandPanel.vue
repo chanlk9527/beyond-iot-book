@@ -41,9 +41,9 @@ onScopeDispose(()=>life.abort())
 </script>
 <template>
  <div class="command-panel">
-  <h2>设备控制</h2><p>按当前绑定物模型向在线设备发送消息。MQTT 投递确认与设备执行结果分别展示；超时表示结果未知。</p>
+  <h2>设备控制</h2>
   <el-alert v-if="!writable||device.lifecycle!=='ACTIVE'" title="当前设备不可控制，请检查操作权限及设备、产品启用状态。" type="info" :closable="false"/>
-  <h3>属性写入</h3><p>直接写入设备属性，不修改平台期望状态。需要保存同步目标时，请到“设备状态”设置期望值。</p>
+  <h3>属性写入</h3><p>直接下发，不修改期望状态。</p>
   <div v-for="p in properties" :key="p.id" class="command-field">
    <el-checkbox v-model="selected[p.id]" :disabled="!canSend">{{p.id}}</el-checkbox>
    <DeviceValueInput v-model="propertyValues[p.id]" :schema="p.schema" :disabled="!canSend||!selected[p.id]" :label="p.id+' 写入值'"/>

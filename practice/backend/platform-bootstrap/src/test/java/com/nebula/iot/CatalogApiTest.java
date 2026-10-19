@@ -22,6 +22,7 @@ class CatalogApiTest {
  @Autowired org.springframework.security.crypto.password.PasswordEncoder encoder;
  @Autowired com.nebula.iot.network.mqtt.VertxMqttGateway mqtt;
  @Autowired com.nebula.iot.device.api.DeviceConnectionDirectory connectionDirectory;
+ @Autowired com.nebula.iot.device.application.RegisteredDeviceDirectory registeredDirectory;
  private static class TestMqttClient extends org.eclipse.paho.mqttv5.client.MqttClient implements AutoCloseable {
   TestMqttClient(String uri,String id)throws org.eclipse.paho.mqttv5.common.MqttException{super(uri,id,new org.eclipse.paho.mqttv5.client.persist.MemoryPersistence());}
   @Override public void close()throws org.eclipse.paho.mqttv5.common.MqttException{if(isConnected())disconnectForcibly(0,0,false);super.close(true);}
@@ -73,8 +74,11 @@ class CatalogApiTest {
   String id=credential.path("clientId").asText(),secret=credential.path("secret").asText();
   jdbc.update("UPDATE device_product SET enabled=FALSE WHERE id=?",product.path("id").asText());rejectsDevice(id,id,secret);
   jdbc.update("UPDATE device_product SET enabled=TRUE WHERE id=?",product.path("id").asText());
+  // Direct SQL fixture changes bypass the service's after-commit cache invalidation.
+  registeredDirectory.invalidate(id);
   jdbc.update("UPDATE tenant SET enabled=FALSE WHERE id='ta'");rejectsDevice(id,id,secret);
   jdbc.update("UPDATE tenant SET enabled=TRUE WHERE id='ta'");
+  registeredDirectory.invalidate(id);
   var active=jdbc.queryForObject("SELECT revision FROM device_registration WHERE id=?",Long.class,id);
   try(var client=connectDevice(id,id,secret)){
    mvc.perform(body(as(put(A+"/devices/"+id),"root"),Map.of("name","MQTT test","lifecycle","DISABLED","revision",active))).andExpect(status().isOk());
