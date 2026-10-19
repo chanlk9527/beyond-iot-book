@@ -60,6 +60,8 @@ mvn.cmd -B -ntp -s .mvn/settings-central.xml -pl platform-bootstrap -am test '-D
 
 `DeviceHistoryLiveFlowTest` 为运行中服务的完整验收：显式设置 `HISTORY_FLOW_BASE_URL=http://127.0.0.1:5173/api/management`、`HISTORY_FLOW_USERNAME`、`HISTORY_FLOW_PASSWORD` 后运行同名 Maven 测试。它通过前端代理登录，创建独立测试产品与设备，保存策略，连接本机 1883 上报属性和事件，经 Kafka／Worker 写入 TDengine 后从管理 API 读回，检查部分上报、重复报告及小数精度。测试结束删除本次产品与设备；测试历史按一天周期到期。仅允许本机地址，凭证通过进程环境提供，不写入测试源码。
 
+2026-10-19 已在本机真实运行的前端代理、独立管理／接入／Worker、Kafka 与 TDengine 3.3.8.8 上通过此完整验收。联调修复了正式 MQTT 默认接收器未接收事件、Kafka JSON 解码小数精度损失两处问题；产品和设备测试资源已在验收后删除。
+
 ## 新增其他适配器
 
 实现 `HistoryStore` 并由启动层显式装配。业务模块不得根据 provider 拼接厂商 SQL。适配器必须通过同一组批量部分成功／幂等、同时间不同消息、空数据与失败区分、游标稳定性、精度及序列隔离验收，并准确申报能力。新增 InfluxDB／TimescaleDB 时分别确定物理映射、时间保留及精度，不能为宣称接口兼容而静默降级。
