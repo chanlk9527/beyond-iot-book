@@ -13,6 +13,11 @@ describe('configured menu navigation',()=>{
     expect(visibleMenus({...account,permissions:['page:products']})).toEqual([menus[1]])
     expect(visibleMenus({...account,menus:[]})).toEqual([])
   })
+  it('opens production as the first catalog page for a production-only role',()=>{
+    const account={id:'u',username:'u',tenantId:'ta',permissions:['page:production'],menus:[{code:'page:production',name:'生产与交付',group:'产品与设备',path:'/catalog/:scope/production',sortOrder:80}]}
+    expect(firstCatalogSection(account)).toBe('production')
+    expect(menuPath(visibleMenus(account)[0]!,account)).toBe('/catalog/tenants/ta/production')
+  })
   it('resolves registered scope placeholders while preserving the tenant context',()=>{
     const account={id:'u',username:'u',tenantId:'tenant a'}
     expect(menuPath(menus[0]!,account)).toBe('/catalog/tenants/tenant%20a/devices')

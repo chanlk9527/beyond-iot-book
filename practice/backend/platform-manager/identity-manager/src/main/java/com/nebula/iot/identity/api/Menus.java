@@ -18,6 +18,7 @@ public final class Menus {
         new Definition("page:menus", "菜单管理", "权限管理", "/access/menus", List.of("iam:role:read", "iam:role:write"), "查看各页面的授权角色，并调整角色的页面授权"),
         new Definition("page:categories", "产品目录", "产品与设备", "/catalog/:scope/categories", List.of("product:read", "product:write"), "查看和维护产品分类目录"),
         new Definition("page:products", "产品管理", "产品与设备", "/catalog/:scope/products", List.of("product:read", "product:write", "product:publish"), "查看和维护产品、物模型，发布版本及启停产品"),
+        new Definition("page:production", "生产与交付", "产品与设备", "/catalog/:scope/production", List.of("production:read", "production:write", "production:credential", "product:read", "device:read", "device:write", "device:credential"), "生产批次、凭证烧录、出厂测试、放行及交付追溯"),
         new Definition("page:devices", "设备管理", "产品与设备", "/catalog/:scope/devices", List.of("device:read", "device:write", "device:credential", "product:read"), "查看、登记和维护设备，轮换凭证；登记时可选择已有产品")
     );
     public static List<String> permissions(List<String> codes) {

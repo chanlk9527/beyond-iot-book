@@ -1,6 +1,6 @@
 # Java 后端使用说明
 
-需要 JDK 21、Maven 3.6.3及以上。版本见 [父 POM](pom.xml)，整体规则见 [项目架构](../docs/architecture.md)。当前包含 core、通用接入契约、Vert.x MQTT 5实现、身份／租户管理基础、业务模板和启动应用。
+需要 JDK 21、Maven 3.6.3及以上。版本见 [父 POM](pom.xml)，整体规则见 [项目架构](../docs/architecture.md)。当前包含 core、Vert.x MQTT 5接入与默认协议、身份／租户与产品设备管理、Redis影子、历史存储、直播、Kafka消息和集群节点／会话基础，以及组合启动应用和三个独立服务。
 
 ## 构建与启动
 
@@ -19,7 +19,7 @@ java -jar platform-bootstrap/target/platform-bootstrap-0.1.0-SNAPSHOT.jar
 
 ## 启动管理后端
 
-基础组合为 Spring MVC、Spring Security、MyBatis、PostgreSQL/MySQL 和 Flyway。`platform-manager` 聚合 `identity-manager`、`tenant-manager`、`device-manager`，由现有 bootstrap 统一装配。管理功能通过 `management` profile 开启；未启用management的默认启动仍不需要数据库，此时MQTT缺少设备目录会拒绝认证；正常后台启动使用持久化登记设备目录。
+基础组合为 Spring MVC、Spring Security、MyBatis、PostgreSQL/MySQL 和 Flyway。`platform-manager` 聚合 `identity-manager`、`tenant-manager`、`device-manager`、`video-manager`，由现有 bootstrap 统一装配。管理功能通过 `management` profile 开启；未启用management的默认启动仍不需要数据库，此时MQTT缺少设备目录会拒绝认证；正常后台启动使用持久化登记设备目录。
 
 先准备 [本地 PostgreSQL 或 MySQL](../infra/README.md) 或已有数据库，再在本目录执行：
 
@@ -71,7 +71,11 @@ java -jar platform-bootstrap/target/platform-bootstrap-0.1.0-SNAPSHOT.jar --spri
 
 `device-manager` 提供产品、模型版本、设备登记、生命周期与凭证管理。普通账号固定访问所属租户，平台超管可跨租户读取并按资源归属写入；产品目录为平台共享数据。API、凭证策略与模型格式见 [device-manager 说明](platform-manager/device-manager/README.md)。
 
-管理数据库迁移由 `management` profile 自动加载。正常management启动默认开启MQTT并使用数据库登记凭证认证；设备必须为ACTIVE、产品启用、所属租户启用。ClientId与用户名均填写设备ID，密码填写后台生成的当前密钥。无租户设备使用内部platform范围；身份归属由数据库确定，不接受客户端指定租户。轮换凭证或停用设备会在事务提交后断开当前连接，后续认证及消息处理重新校验接入资格；设备启用状态不等于在线。显式mqtt-dev模式仍只使用开发目录。正式上行、控制和OTA按后续阶段实现。
+管理数据库迁移由 `management` profile 自动加载。正常management启动默认开启MQTT并使用数据库登记凭证认证；设备必须为ACTIVE、产品启用、所属租户启用。ClientId与用户名均填写设备ID，密码填写后台生成的当前密钥。无租户设备使用内部platform范围；身份归属由数据库确定，不接受客户端指定租户。轮换凭证或停用设备会在事务提交后断开本机网关连接，后续认证及消息处理通过设备目录／缓存复核接入资格；远端主动断连及缓存精确失效仍待完善，不能承诺跨节点即时撤销。设备启用状态不等于在线。显式mqtt-dev模式仍只使用开发目录。属性／事件上行、影子／历史处理及后台属性写入／操作调用已接入；配置与OTA业务、通用可靠交付仍待实现。分离部署的跨节点控制需显式启用 cluster-commands，详见下文。
+
+### 生产与交付
+
+设备模块已提供批次管理、批量生成设备与凭证、人工烧录确认、出厂测试、整批放行及交付记录。管理端入口为“产品与设备 → 生产与交付”，普通角色需显式授权新页面；完整流程、权限及V24／V25迁移见[设备模块说明](platform-manager/device-manager/README.md#生产与交付管理)。交付记录不改变设备租户或App绑定；自动烧录与硬件测试不在首版范围。
 
 ### RBAC 功能权限
 
@@ -179,7 +183,7 @@ Invoke-WebRequest "$base/api/management/auth/logout" -Method Post -WebSession $m
 
 普通账号必须在创建时绑定一个租户。使用租户详情的新建用户，或通过用户管理提交`{username,password,tenantId,role}`；普通租户管理员省略tenantId时固定使用本人租户，不能指定其他租户。平台超管必须显式选择目标租户。
 
-租户成员角色与后台RBAC独立；产品设备管理已接入功能权限和成员校验，控制等后续业务仍需落实对应授权。租户通过 URL 显式指定，不在 Session 中保存可变的当前租户；前端切换仍需清理缓存及订阅，服务端不信任客户端传入的归属标识。现已提供产品与设备登记管理接口，规则、OTA及设备控制等业务仍待后续实现。
+租户成员角色与后台RBAC独立；产品设备查询、影子、历史与控制已接入功能权限和成员校验，新增业务仍需落实对应授权。租户通过 URL 显式指定，不在 Session 中保存可变的当前租户；前端切换仍需清理缓存及订阅，服务端不信任客户端传入的归属标识。现已提供产品设备管理、属性写入／操作调用及结果查询接口，规则与OTA业务仍待实现。
 
 ### 迁移与验证
 
@@ -222,7 +226,7 @@ gateway.send(command);
 
 传输回执只表示成功PUBACK，业务完成需核对独立回复。自动校时已实现，其他业务进入接收器；开发收件箱不会自动保存业务状态、调度OTA或生成成功回复。命令／消息过期、离线、模型不符、在途窗口满或PUBACK超时会异常完成。
 
-暂未提供下行HTTP操作接口。可运行网络集成测试验证完整链路：
+已提供后台属性写入、操作调用、结果查询和保存期望后显式下发的 HTTP 接口，见[设备管理说明](platform-manager/device-manager/README.md#设备控制与结果查询)。mqtt-dev 清单不等于后台设备登记；后台接口按真实资源授权。下列测试验证网络层 MQTT 收发，不替代管理 HTTP 或跨节点命令验收：
 
 ```powershell
 mvn -B -ntp -s .mvn/settings-central.xml -pl platform-components/network-component -am verify
@@ -234,15 +238,15 @@ mvn -B -ntp -s .mvn/settings-central.xml -pl platform-components/network-compone
 | --- | --- |
 | DeviceAccessGateway | 通用启停与按设备投递；HTTP／TCP等可独立实现，不要求订阅或长连接 |
 | DeviceAuthenticator | management下以登记设备的BCrypt哈希验证密钥，ClientId／用户名必须与设备ID一致；未启用management则拒绝认证 |
-| DeviceAccessResolver | management下读取同范围ACTIVE设备、启用产品／租户与设备绑定的已发布模型；每次操作重新查询 |
+| DeviceAccessResolver | management下通过设备／模型缓存解析同范围ACTIVE设备、启用产品／租户与绑定的已发布模型；每次操作复核资格，但不保证每次直接查库 |
 | ProtocolSupport | 默认OfficialMqttProtocol；自定义Bean可替换整个接入实例的协议提供者，动态插件与按产品选择暂未实现 |
 | DeviceMessageCodec | 提供者返回的同步编解码器，定义Topic和报文映射，网络层不内置业务格式 |
-| DeviceMessageHandler | 默认拒绝接收；正式Bean负责可靠接收、持久化和业务处理 |
+| DeviceMessageHandler | 正常模式已接入属性／事件报告及受支持的命令反馈，经EventBus分发；未接入的业务类型拒绝接收，开发模式使用有界内存收件箱 |
 | development-mode | 显式开启后使用内存设备目录及1024条有界收件箱，不持久化；通过DevelopmentMessageInbox查看快照 |
 
-MQTT默认开启；management模式接入登记设备，缺少业务接收器时会拒绝对应消息／上行，不会自动降级匿名接入。替换正式Bean时关闭开发模式。后续注册域撤销资格可调用 `VertxMqttGateway.disconnectDevice`，并在认证与设备解析中持续拒绝。
+MQTT默认开启；management模式接入登记设备，缺少业务接收器时会拒绝对应消息／上行，不会自动降级匿名接入。替换正式Bean时关闭开发模式。登记域的凭证轮换、设备停用／退役已通过事务提交后事件断开本机网关连接；跨节点主动撤销仍待实现，缓存及远端资格收敛限制见[设备管理说明](platform-manager/device-manager/README.md#设备模型三级缓存)。
 
-首版是基于Vert.x MQTT的定向设备接入服务端：本地明文TCP、单节点、短会话；不提供通用订阅分发、Retain、遗嘱、QoS 2、TLS、离线队列和持久会话。服务端声明相应能力并拒绝不支持的请求，MQTT 3连接被拒绝。它不等同于完整通用Broker。
+首版是基于Vert.x MQTT的定向设备接入服务端：本地明文TCP、短会话；默认单节点，显式cluster模式支持共享会话归属，cluster-commands支持跨节点命令；不提供通用订阅分发、Retain、遗嘱、QoS 2、TLS、离线队列和持久会话。服务端声明相应能力并拒绝不支持的请求，MQTT 3连接被拒绝。它不等同于完整通用Broker。
 
 上行在模型校验和接收端成功后才发QoS 1确认；开发收件箱成功不代表持久化。集群命令的持久化和专用 Outbox 见下方说明；其他领域的可靠交付、跨重连业务去重仍需后续实现。网关健康可观察监听状态、连接与会话数、接收／拒绝计数，不代表尚未接入的数据库或其他依赖可用。
 

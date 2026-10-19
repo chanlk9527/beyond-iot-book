@@ -1,6 +1,6 @@
 # 产品与设备管理
 
-Spring MVC、MyBatis、PostgreSQL管理模块，随`management` profile启用。拥有产品、已发布物模型、设备注册和操作审计表。它提供持久化设备认证与接入目录；正常management启动默认启用MQTT。显式mqtt-dev仍使用独立开发目录。
+Spring MVC、MyBatis、PostgreSQL／MySQL管理模块，随`management` profile启用。拥有产品、已发布物模型、设备注册、操作审计、历史策略／待写记录，以及显式cluster-commands模式下的命令与专用Outbox表。它提供持久化设备认证与接入目录；正常management启动默认启用MQTT。显式mqtt-dev仍使用独立开发目录。
 
 ## 范围与权限
 
@@ -77,7 +77,7 @@ GET `/products` 的 category 参数为空时返回全部，一级 ID 匹配其�
 
 配置包括 category、manufacturer、modelNumber、deviceType（DIRECT/GATEWAY/CHILD）、networkWay（ETHERNET/WIFI/CELLULAR/NB_IOT/LORA/OTHER）、transportProtocol（MQTT）、messageProtocol（nebula-mqtt-v1）、dataFormat（JSON）、firmwareVersion、supportUrl 与 installationNotes。普通文本最多100字符，文档地址及维护说明最多1000字符，配置序列化后最多8192字符；文档地址仅接受 HTTP(S)。
 
-这些配置属于产品档案和接入规划，不随物模型版本冻结。网关/子设备类型不启用拓扑、代理认证或消息转发；入网方式不配置网络监听。正常MQTT服务已使用登记凭证认证，设备需为ACTIVE且产品与所属租户启用。产品级存储策略、保留周期及协议插件选择尚未实现，页面明确显示能力边界。
+这些配置属于产品档案和接入规划，不随物模型版本冻结。网关/子设备类型不启用拓扑、代理认证或消息转发；入网方式不配置网络监听。正常MQTT服务已使用登记凭证认证，设备需为ACTIVE且产品与所属租户启用。产品级数据策略已独立持久化，支持最新属性值开关、逐次历史采集与按天保留，部署及高级策略限制见[历史存储说明](../../platform-components/storage-component/README.md)。动态协议插件及按产品选择协议尚未实现。
 
 参考：https://github.com/jetlinks/jetlinks-community/blob/master/jetlinks-manager/device-manager/src/main/java/org/jetlinks/community/device/entity/DeviceProductEntity.java
 
@@ -85,7 +85,7 @@ GET `/products` 的 category 参数为空时返回全部，一级 ID 匹配其�
 
 每台设备生成独立的16位小写字母身份，字符集排除容易混淆的 `i`、`l`、`o`；ClientId与用户名均使用该设备ID，MQTT密码使用后台生成的当前密钥。正常启动的MQTT 5服务使用数据库BCrypt哈希校验，拒绝伪造ClientId、跨租户身份和失效凭证。设备登记后默认启用（ACTIVE），可立即使用凭证接入；DISABLED／RETIRED不允许连接；产品或所属租户停用也拒绝接入。数据库同时保存BCrypt哈希和当前凭证明文，设备可通过凭证接口长期查看；登记和轮换响应设置Cache-Control:no-store。当前 practice 阶段暂不处理凭证长期暴露问题，后续再收紧存储和展示策略。
 
-轮换替换旧哈希和明文并递增credentialVersion与revision，事务提交后断开设备当前MQTT会话，旧密钥不能重连；停用或退役设备也会断开连接。网络失败不自动重试；设备详情可重新读取当前凭证。本版未提供凭证导出、批量导入或自动迁移归属。
+轮换替换旧哈希和明文并递增credentialVersion与revision，事务提交后通过本机事件断开当前进程内的MQTT会话；停用或退役设备也走同一路径。跨节点主动断连与远端缓存精确失效尚未完成，分离部署不能据此承诺旧凭证即时失效。网络失败不自动重试；设备详情可重新读取当前凭证。本版未提供凭证导出、批量导入或自动迁移归属。
 
 生命周期为 ACTIVE、DISABLED、RETIRED。登记成功即启用，启用只表示允许接入，不代表在线；退役后不能重新启用或轮换凭证。V17 将历史 REGISTERED 设备转为 ACTIVE 并递增 revision，保留设备身份、凭证和模型，停用与退役设备保持原状态。产品和模型绑定保持不变。修改与审计同事务，产品级锁与revision保护发布、登记、状态和凭证更新的并发一致性。
 
@@ -93,7 +93,8 @@ GET `/products` 的 category 参数为空时返回全部，一级 ID 匹配其�
 
 `CatalogApiTest` 通过 Spring 安全链、Flyway、MyBatis 和 H2 PostgreSQL 兼容模式验证归属、授权、模型版本、凭证、生命周期和并发冲突。H2 测试不替代真实 PostgreSQL 验证。
 
-管理API不表示已完成设备通信。正式MQTT认证／注册解析、可靠上行存储、连接状态、设备控制、OTA 和批量导入仍待后续阶段实现；现有协议与接入组件不由本模块自动启用。
+已接入登记凭证认证与注册解析、在线查询、属性／事件上行、影子／历史处理及属性写入／操作控制。Kafka模式下上行在broker确认后完成接收，不等待全部消费者；Local模式无持久消息保障。通用可靠交付、影子更新与通知原子发布、OTA和批量导入仍待实现。具体装配由bootstrap或独立服务负责，测试范围见[后端说明](../../README.md)。
+
 ## 设备影子（Redis）
 
 设备详情的“设备状态”页签展示 reported（设备最新上报）、desired（平台期望）和 delta（尚未匹配的目标）。数据保存在 Redis 的 `nebula:shadow:v1:<租户编码>:<设备编码>` 键中，编码使用 Base64URL 避免分隔符碰撞；无租户设备使用 platform 范围。影子不设置 TTL，不以进程内缓存或 PostgreSQL 兜底；Redis 的持久化和备份策略决定这份状态的恢复能力。
@@ -107,16 +108,30 @@ version 是独立的影子版本，与设备登记 revision 无关；desired 和
 
 上报从已认证消息进入内部总线后由影子订阅者消费，仅接受 PropertyReport；核对登记范围、ACTIVE 生命周期、启用产品和固定模型。按属性合并并保存设备观测时间、平台接收时间和消息 ID，旧观测不覆盖新值；相同观测时间按消息 ID 排序。设备时间超过平台接收时间5分钟的报告拒绝，最近128个已合并消息 ID 用于重复抑制。Redis 写入失败会使该次消息处理失败。管理 API 不提供伪造 reported 的入口。
 
-期望与上报值相等时从 delta 消失，但 desired 仍保留。delta 只表达值差异，不是命令受理或执行回执；本阶段不自动下发 desired，也不把影子更新当成在线证明。现有 mqtt-dev 清单没有对应管理登记时会跳过影子；正常management模式使用数据库登记设备目录，属性上报通过现有消息总线进入影子，Redis失败会拒绝此次处理。
-# 设备/模型三级缓存
+期望与上报值相等时从 delta 消失，但 desired 仍保留。delta 只表达值差异，不是命令受理或执行回执；本阶段不自动下发 desired，也不把影子更新当成在线证明。现有 mqtt-dev 清单没有对应管理登记时会跳过影子；正常management模式使用数据库登记设备目录，属性上报通过现有消息总线进入影子，Redis失败会使影子消费失败；Kafka模式下不会撤回已完成的上行PUBACK，而由消费重试／失败保留处理。Local模式默认等待订阅处理结果。
+
+## 设备/模型三级缓存
 
 缓存内核位于 `infrastructure.cache.ThreeLevelCache<K,V>`，不依赖设备领域。设备连接通过 `DeviceConnectionCache` 适配，物模型通过 `ThingModelCache` 适配；后续权限、租户和产品配置可以复用同一内核，只需提供缓存 key、值类型和数据库加载函数。
 
-接入鉴权和物模型校验使用同一份只读快照缓存：请求先查进程内 Caffeine（L1），未命中再查 Redis（L2），最后回源 `device_registration + device_model_version`（L3）。数据库始终是权威数据源；Redis 未启用、超时、反序列化失败都会自动回源，不影响设备接入。
+接入鉴权和物模型校验使用同一份只读快照缓存：请求先查进程内 Caffeine（L1），未命中再查 Redis（L2），最后回源 `device_registration + device_model_version`（L3）。数据库始终是权威数据源；L1未命中后，Redis未启用、超时或反序列化失败会回源数据库，数据库查询失败仍会使接入失败。该降级不保证已有L1中的旧资格即时失效。
 
 缓存值只包含设备资格、BCrypt 密码哈希和已发布模型 JSON，不包含设备密钥明文、影子状态或控制命令。L1 默认最多 10000 条、空闲 5 分钟；L2 默认 30 分钟，可通过 `DEVICE_CACHE_LOCAL_MAXIMUM_SIZE`、`DEVICE_CACHE_LOCAL_TTL` 和 `DEVICE_CACHE_REDIS_TTL` 调整。Redis key 使用版本前缀和全局 generation，产品停用等全量失效无需执行危险的 `KEYS` 扫描。
 
-设备凭证轮换、设备生命周期变更、删除会在事务提交后精确失效；产品启停会递增共享 generation。这样既避免旧资格继续生效，也避免写事务回滚时提前清除仍然有效的快照。
+设备凭证轮换、设备生命周期变更、删除会在事务提交后精确失效；产品启停会递增共享 generation。事务提交后失效避免写事务回滚时提前清除有效快照。精确失效只清除本机L1及共享L2的对应键，不会主动清除其他节点已有的L1；产品全量失效通过共享generation在缓存访问时检查，检查间隔为250毫秒。Redis异常时不保证跨节点失效及时收敛，不能将该缓存机制视为完整的跨节点资格撤销。
+
+## 设备控制与结果查询
+
+相对本模块范围前缀提供以下后台接口，写入保留Session／CSRF、device:read／device:write、实际资源归属及租户OWNER／ADMIN校验；查询使用device:read与资源范围校验。仅启用设备和产品接受新命令，输入按设备绑定模型校验。
+
+| 方法与路径 | 行为 |
+| --- | --- |
+| POST `/devices/{id}/downlinks/properties` | `{properties:{...}}`下发可写属性 |
+| POST `/devices/{id}/downlinks/operations` | `{operationId,inputs:{...}}`调用物模型操作 |
+| GET `/devices/{id}/downlinks/{messageId}` | 查询传输与执行状态，不把PUBACK视为执行完成 |
+| PUT `/devices/{id}/shadow/desired-and-dispatch` | `{version,desired:{...}}`先保存期望，再下发非null属性；分别返回shadow、downlink或dispatchError |
+
+单独保存desired不会自动下发；desired-and-dispatch的两步不具备跨存储原子性。默认模式使用本机发送器和有界短期内存结果，不支持跨进程查询或重启恢复；分离部署须启用下述cluster-commands模式才具备跨节点命令闭环。属性读取、设备配置和OTA尚无对应后台业务接口。
 
 ## 集群命令持久化
 
@@ -125,3 +140,35 @@ version 是独立的影子版本，与设备登记 revision 无关；desired 和
 Worker 发布及路由命令，access 领取一次发送权并关联认证反馈；重复事件或回执不会重复发送或回退最终状态。可能发送后的异常记为 UNKNOWN／TIMED_OUT，禁止自动重发；迟到最终回执可以解决未知状态，历史保留。模型、设备、replyTo、反馈类型与 commandId 继续核对。没有有效会话的命令以 OFFLINE 明确结束，本阶段不提供离线命令队列。
 
 启动、迁移、状态、限制与真实六进程验证命令统一见 [后端说明](../../README.md#持久化命令与跨节点下行)。当前影子 desired 更新与命令保存不在同一事务，不能将 desired-and-dispatch 接口解读为 Redis 与数据库原子提交。记录清理／保留、历史查询页面和生产容量验证尚未交付。
+## 生产与交付管理
+
+管理端入口为 `/catalog/platform/production` 或 `/catalog/tenants/{tenantId}/production`，页面权限为 `page:production`。普通账号只操作本租户，读取需要 `production:read`；创建、生成、烧录确认、测试、放行和交付需要 `production:write`，且为有效租户 OWNER／ADMIN。平台超管可跨租户查询和操作；批次继承所选产品的实际归属，客户端不能另传归属覆盖它。
+
+首版流程：新建批次 → 批量生成设备 → 导出烧录凭证 → 逐台确认烧录 → 登记出厂测试 → 整批放行 → 登记交付。
+
+- 批次固定编码、产品、已发布模型、计划数量、硬件版本和目标固件版本。单批1～50台，设备编码为“批次编码-四位序号”；批次编码在所属范围唯一。生成操作同步执行，设备、凭证、批次明细和记录在同一事务保存，任一编码冲突全部回滚。生成设备复用现有登记用例，额外需要 `device:write`、`device:credential`；创建时查询产品需要 `product:read`。
+- 生成后的设备为ACTIVE，可以用于联网测试；生产状态独立于设备生命周期、在线状态和App绑定。批次状态为PLANNED／PRODUCING／RELEASED／DELIVERED，放行不是设备接入准入开关。
+- 凭证通过显式POST导出，要求 `production:credential`、`device:credential` 和范围写资格，保留CSRF、`Cache-Control: no-store`及导出操作记录。导出当前凭证和版本，JSON文件包含密钥；列表、详情与生产记录不返回密钥，前端不在浏览器存储中保存凭证。生成前和交付后不提供批次凭证导出。
+- 烧录和测试均为人工登记证据，不连接烧录器或自动检测硬件。烧录确认记录当前凭证版本、工位、操作人与说明；确认烧录会清空当前测试结果，历次记录保留。出厂测试要求当前版本已烧录，记录PASS／FAIL、工位和必填的测试项目／结果说明。目标固件版本是生产计划信息，人工测试结果不等于平台已验证设备实际固件。
+- 放行需要每台设备使用当前凭证完成烧录并通过测试，设备、产品和租户均具备有效接入资格。交付再次复核这些条件，记录交付对象、单号、时间与操作人。轮换凭证后旧测试不能用于交付；重新确认烧录／登记测试会将已放行批次退回生产中，必须重新放行。交付后不能通过生产接口补写或覆盖烧录、测试和交付证据；设备正常生命周期维护仍保留。
+- 交付仅记录物流／业务交接，不迁移设备租户，不建立App用户绑定或家庭共享。首版整批放行、整批交付，不提供拆批、部分交付、批次取消、自动烧录、自动测试或首次联网激活流程。
+
+相对本模块范围前缀：
+
+| 方法与路径 | 请求与结果 |
+| --- | --- |
+| GET `/production/batches` | query、page、size；分页批次列表，page从1起，size默认20、最多100 |
+| POST `/production/batches` | `{code,name,productId,modelVersion,quantity,hardwareVersion,firmwareVersion}`创建批次，201 |
+| GET `/production/batches/{id}` | 批次、最多50台设备明细与操作记录；eventPage从1起，每页100条，totalEvents用于翻页 |
+| POST `/production/batches/{id}/generate` | `{revision}`生成整批设备，不在响应中返回凭证 |
+| POST `/production/batches/{id}/credentials` | `{revision}`导出当前凭证列表；导出留痕，不递增批次revision |
+| POST `/production/batches/{id}/devices/{deviceId}/burn` | `{revision,credentialVersion,station,note}`登记人工烧录确认 |
+| POST `/production/batches/{id}/devices/{deviceId}/tests` | `{revision,credentialVersion,result,station,note}`登记人工测试；result为PASS／FAIL |
+| POST `/production/batches/{id}/release` | `{revision,note}`整批放行，note为必填放行依据 |
+| POST `/production/batches/{id}/deliver` | `{revision,recipient,deliveryRef,note}`登记整批交付 |
+
+所有变更使用批次行锁、产品行锁和revision复核；业务写事务使用READ_COMMITTED，避免MySQL默认重复读快照在等待锁后继续使用旧证据。普通变更递增revision，过期版本或非法状态返回409；同一生成请求重复提交不会再生成设备。`note`在烧录和交付时可为空字符串，测试和放行时必填；工位最多100字符，说明最多1000字符，交付对象最多200字符，交付单号最多100字符。
+
+V24新增生产批次、明细和事件表，V25注册页面菜单及所需能力；不自动为已有普通角色授权。数据库外键保留追溯关系：有生产批次的产品和纳入生产的设备不能通过现有删除接口物理删除，可按原规则停用或退役。生产表不复制设备密钥。迁移不删除现有业务数据，也不自动为已有设备补造生产记录。
+
+`ProductionApiTest` 使用H2、真实Flyway、管理安全链与设备登记用例验证完整流程、凭证导出、跨租户／只读／CSRF限制、重复及并发生成、冲突回滚、版本变化、返工和删除保护；`ProductionView.test.ts`验证操作门槛、人工记录、显式凭证下载和失败保留输入。H2验证不代替真实PostgreSQL／MySQL并发验收；硬件烧录与实际出厂测试仍需现场执行。

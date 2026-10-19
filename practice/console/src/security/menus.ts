@@ -10,6 +10,7 @@ export const catalogPages = [
   { code: 'page:categories', name: '产品目录', section: 'categories' },
   { code: 'page:products', name: '产品管理', section: 'products' },
   { code: 'page:devices', name: '设备管理', section: 'devices' },
+  { code: 'page:production', name: '生产与交付', section: 'production' },
 ] as const
 export function canVisitPage(account: Account | null, code: string): boolean {
   return hasPermission(account, code)

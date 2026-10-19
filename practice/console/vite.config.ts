@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import { fileURLToPath } from 'node:url'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
@@ -12,7 +13,13 @@ export default defineConfig(({ mode }) => {
   }
   return {
     plugins: [vue()],
-    server: { port: 5173, strictPort: true, proxy },
+    server: {
+      port: 5173,
+      strictPort: true,
+      proxy,
+      // Developer pages import the shared guides outside the console root.
+      fs: { allow: [fileURLToPath(new URL('.', import.meta.url)), fileURLToPath(new URL('../docs', import.meta.url))] },
+    },
     preview: { port: 4173, strictPort: true, proxy },
   }
 })

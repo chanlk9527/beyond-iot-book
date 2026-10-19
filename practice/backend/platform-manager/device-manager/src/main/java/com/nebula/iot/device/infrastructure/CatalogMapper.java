@@ -5,6 +5,8 @@ import org.apache.ibatis.annotations.*;
 import java.util.List;
 
 public interface CatalogMapper extends CatalogRepository {
+ @Select("SELECT COUNT(*) FROM device_production_batch WHERE product_id=#{productId}") long productionBatches(String productId);
+ @Select("SELECT COUNT(*) FROM device_production_item WHERE device_id=#{deviceId}") long productionItems(String deviceId);
  @Select("SELECT d.id,d.scope_key AS scopeKey,d.product_id AS productId,d.model_version AS modelVersion,d.credential_hash AS credentialHash,m.model_json AS modelJson FROM device_registration d JOIN device_product p ON p.id=d.product_id AND p.scope_key=d.scope_key JOIN device_model_version m ON m.product_id=d.product_id AND m.version=d.model_version LEFT JOIN tenant t ON t.id=d.tenant_id WHERE d.id=#{id} AND d.lifecycle='ACTIVE' AND p.enabled=TRUE AND (d.tenant_id IS NULL OR t.enabled=TRUE)")
  ConnectionRow connection(String id);
 

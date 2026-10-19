@@ -3,6 +3,8 @@ import com.nebula.iot.device.domain.CatalogRows.*;
 import java.util.List;
 public interface CatalogRepository {
  ConnectionRow connection(String id);
+ long productionBatches(String productId);
+ long productionItems(String deviceId);
  DirectoryRow directory(String scope);
  int insertDirectory(String scope,String tree);
  int updateDirectory(String scope,String tree,long revision);

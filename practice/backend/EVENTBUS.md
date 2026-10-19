@@ -4,7 +4,7 @@
 
 `EVENTBUS_MODE=local` 保持单 JVM 开发方式；`kafka` 启用跨进程事件发布／订阅。已实现 JSON 编码、具名共享消费组、节点广播、业务主题过滤、发布确认、处理超时、有界重试和失败事件保留。设备属性订阅和实时通知入口已接入。
 
-这次交付是集群消息传输基础，不是整个平台集群验收。独立运行入口与现有会话基础见 [三服务说明](platform-services/README.md)；完整事务交付、跨节点命令闭环、共享登录／实时票据和缓存撤销仍须按各专项验收。数据库／Redis 更新与 Kafka 发布不是共同事务；Kafka producer 幂等也不等于业务幂等。
+这次交付是集群消息传输基础，不是整个平台集群验收。独立运行入口与现有会话基础见 [三服务说明](platform-services/README.md)；跨节点命令闭环已在显式cluster-commands模式完成独立专项验收；通用事务交付、影子可靠发布、共享登录／实时票据和完整跨节点缓存撤销仍待完成。数据库／Redis 更新与 Kafka 发布不是共同事务；Kafka producer 幂等也不等于业务幂等。
 
 ## 主题和订阅规模
 
@@ -88,6 +88,6 @@ mvn -pl platform-components/message-component -am test
 测试启动真实的嵌入式 Kafka KRaft broker，不依赖 Docker。覆盖编码与类型拒绝、多模式匹配、共享组两实例分担、节点广播、故障重试／失败保留、消费者离线后恢复，以及独立发布 JVM 到订阅 JVM 的类型化事件传递。跨物理机器、broker 多副本故障和大规模连接验收尚未完成。
 ## 三个独立服务
 
-已提供 management-service、access-service、worker-service 三个可执行 JAR，复用现有业务装配并固定运行角色。构建、启动脚本、端口、共享依赖及跨进程验收见 [独立服务说明](platform-services/README.md)。原组合启动方式保留。部署边界已拆分，领域数据适配暂时共享；完整命令、事务与登录集群能力仍按专项验收。
+已提供 management-service、access-service、worker-service 三个可执行 JAR，复用现有业务装配并固定运行角色。构建、启动脚本、端口、共享依赖及跨进程验收见 [独立服务说明](platform-services/README.md)。原组合启动方式保留。部署边界已拆分，领域数据适配暂时共享；命令闭环需额外启用cluster-commands并按专项验收；通用事务交付与共享登录仍待完成。
 
 Spring 装配下，Kafka 订阅在生命周期阶段统一启动，等待领域事件监听器注册完毕后再处理积压；脱离 Spring 直接构造时仍默认立即启动，可显式调用 deferSubscriptionsUntilStart() 后通过 start() 启动。该顺序由独立服务积压恢复测试覆盖。

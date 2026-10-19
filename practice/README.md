@@ -2,7 +2,9 @@
 
 建设多租户管理后台与 Java IoT 平台，作为《IoT 平台设计》的配套项目。母婴暖奶器用于贯通验证，平台能力面向多产品。
 
-当前具备账号与租户管理、RBAC 和菜单维护、产品与模型版本、设备登记、凭证管理和 Redis 设备影子，以及默认开启的 MQTT 5 接入和默认设备协议。后台登记设备的凭证已接入 MQTT 认证；新增可适配其他数据库的 TDengine 历史存储首版，支持产品策略、属性／事件采集、按天保留与设备历史查询，部署见 [历史存储组件](backend/platform-components/storage-component/README.md)。可靠上行交付、历史高级策略和 OTA 等业务仍需完善。
+当前具备账号与租户管理、RBAC 和菜单维护、产品与模型版本、设备登记、凭证管理和 Redis 设备影子，以及默认开启的 MQTT 5 接入和默认设备协议。后台登记设备的凭证已接入 MQTT 认证；新增可适配其他数据库的 TDengine 历史存储首版，支持产品策略、属性／事件采集、按天保留与设备历史查询，部署见 [历史存储组件](backend/platform-components/storage-component/README.md)。
+
+已支持后台属性写入／操作调用、Kafka跨进程传输、共享节点／设备会话目录，以及显式cluster-commands模式的持久化命令与跨节点下行。新增[生产与交付管理](backend/platform-manager/device-manager/README.md#生产与交付管理)，贯通批次、设备生成、人工烧录／测试、放行和交付记录；三个独立服务的运行方式见[服务说明](backend/platform-services/README.md)。通用可靠交付、影子可靠发布、共享登录／实时票据、历史高级策略和OTA仍待完成，完整集群尚未验收。
 
 ## 阅读入口
 

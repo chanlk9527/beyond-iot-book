@@ -104,7 +104,7 @@ Kafka 消费者在 Spring 生命周期阶段启动，保证领域事件监听器
 - 状态通知仍有 Redis 更新与 Kafka 发布间的故障窗口，业务幂等／可靠发布继续按架构规划完善。
 - 实时通知当前每个 management 节点独立读取并过滤本地连接，未实现订阅归属定向分发和 10 万在线连接验收。
 - 登录和 WebSocket 票据仍在本机，先让客户端固定连接一个 management；不要把新增第二实例当作会话共享已完成。
-- 本次验收限定上行到通知。跨节点命令闭环有独立开发配置时也不在本次启动入口默认启用，不能用本机 `DeviceDownlinkSender` 宣称跨节点下行已完成。
+- 本次验收限定上行到通知。跨节点命令闭环已在cluster-commands模式通过独立六进程专项测试，但本启动入口默认未启用，不属于SeparatedServicesIT的验收范围；不能用本机 `DeviceDownlinkSender` 宣称当前部署具备跨节点下行。
 ## 本机重启后的快捷入口
 
 本电脑 WSL Ubuntu 的依赖统一维护在 `/home/admini/workspace/dev-env/docker-compose.yml`，包含原有 PostgreSQL、Redis、MySQL、Nacos 及新纳入的 Kafka。Kafka 配置 `restart: always`，数据卷 `nebula-eventbus_kafka-data` 作为 external volume 复用；`kafka-init` 仅负责幂等建 topic，完成后退出是正常状态。原 Compose 在同目录保留时间戳备份。
@@ -120,3 +120,7 @@ PowerShell 入口为 `backend/scripts/Start-LocalCluster.ps1` 和 `Stop-LocalClu
 `restart: always` 只在 Docker 启动后恢复容器，不代表 Windows 启动时 WSL 和 Java 一定已启动。本机入口通过双击完成这一步，没有注册 Windows 登录计划任务。Docker 服务已在 WSL 中启用 systemd 开机启动。
 
 第二个本机接入节点：运行 `./Start-Cluster.cmd -SecondAccess`，额外启动 access-b（HTTP 8083、MQTT 1884），复用已有进程。重启电脑后带相同参数恢复双接入节点。停止入口也会停止 access-b；日志和进程记录位于 `practice/.run/services/access-b/`。
+
+## macOS 快捷入口
+
+macOS 使用仓库内 `practice/cluster.sh`，提供三服务的后台启停、构建、部分角色重启和第二接入节点；Finder 入口为 `Start-Cluster.command`、`Stop-Cluster.command`。从组合模式切换执行 `./practice/cluster.sh --build --replace-combined`。配置、参数、依赖启动边界与日志见 [macOS 三服务快捷启动](../../STARTUP.md#macos-三服务快捷启动)。

@@ -106,6 +106,7 @@ public class CatalogService {
   if(row.revision()!=revision)conflict("Product changed; refresh and retry");
   if(row.enabled())conflict("Disable the product before deleting it");
   if(data.deviceCount(scope,"",id)>0)conflict("Product has devices and cannot be deleted");
+  if(data.productionBatches(id)>0)conflict("Product has production batches and cannot be deleted");
   data.deleteModels(id);
   if(data.deleteProduct(scope,id,revision)!=1)conflict("Product changed; refresh and retry");
   audit(actor,scope,"PRODUCT_DELETED",id);
@@ -171,6 +172,8 @@ public class CatalogService {
  }
  @Transactional public void deleteDevice(String actor,String tenant,String id,Long revision){
   String scope=access(actor,tenant,"device:write",true);validRevision(revision);var row=deviceRow(scope,id);
+  lock(scope,row.productId());
+  if(data.productionItems(id)>0)conflict("Production devices must be retained for traceability");
   if(!row.lifecycle().equals("DISABLED")) conflict("Only disabled devices can be deleted");
   if(data.deleteDevice(scope,id,revision)!=1) conflict("Device changed; refresh and retry");
   invalidateConnection(id);audit(actor,scope,"DEVICE_DELETED",id);

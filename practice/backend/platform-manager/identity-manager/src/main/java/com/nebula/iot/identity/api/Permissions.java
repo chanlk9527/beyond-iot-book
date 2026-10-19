@@ -24,6 +24,9 @@ public final class Permissions {
         new Definition("device:read","查看设备","产品与设备"),
         new Definition("device:write","登记及管理设备生命周期","产品与设备"),
         new Definition("device:credential","轮换设备凭证","产品与设备"),
+        new Definition("production:read","查看生产批次与交付记录","生产与交付"),
+        new Definition("production:write","维护生产、测试、放行与交付","生产与交付"),
+        new Definition("production:credential","导出生产批次设备凭证","生产与交付"),
         new Definition("iam:grant","分配用户角色","权限管理")
     );
     public static final Set<String> ALL = java.util.stream.Stream.concat(

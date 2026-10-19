@@ -42,7 +42,7 @@ class RbacApiTest {
     @Test void menuCatalogAndPageRoleGrantsAreRegisteredAndRevocable() throws Exception {
         mvc.perform(actor(get("/api/management/iam/menus"),"alice")).andExpect(status().isForbidden());
         mvc.perform(actor(get("/api/management/iam/menus"),"root"))
-            .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(7));
+            .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(com.nebula.iot.identity.api.Menus.CATALOG.size()));
         var created=mvc.perform(body(actor(post("/api/management/iam/roles"),"root"),
             Map.of("code","device-page","name","Device page","menus",List.of("page:devices"))))
             .andExpect(status().isCreated()).andReturn().getResponse();
