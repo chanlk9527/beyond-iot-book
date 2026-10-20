@@ -8,4 +8,8 @@ import java.util.concurrent.CompletionStage;
 @FunctionalInterface
 public interface DeviceAccessResolver {
     CompletionStage<Optional<DeviceAccessContext>> resolve(DeviceKey device);
+    /** Identity in a packet is never sufficient authorization. Fail closed by default. */
+    default CompletionStage<Optional<DeviceAccessContext>> resolveChild(DeviceKey gateway, DeviceKey child) {
+        return java.util.concurrent.CompletableFuture.completedFuture(Optional.empty());
+    }
 }

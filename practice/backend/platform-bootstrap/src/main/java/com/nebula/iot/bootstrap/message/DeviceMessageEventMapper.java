@@ -29,6 +29,6 @@ final class DeviceMessageEventMapper {
         var device = message.device();
         return new EventMessage(message.messageId().value(), "device/" + device.deviceId().value() + "/" + suffix,
                 message.occurredAt(), message.receivedAt(), device.tenantId().value(), device.deviceId().value(),
-                message.modelVersion(), message.messageId().value(), message.origin().name(), Map.of(), body);
+                message.modelVersion(), message.messageId().value(), message.origin().name(), Map.of(), body, message.productId()==null?null:message.productId().value());
     }
 }

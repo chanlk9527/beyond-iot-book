@@ -1,6 +1,6 @@
 package com.nebula.iot.core.model;
 
-/** Initial scalar subset; structured values need their own schema before being added. */
+/** Schema types; ENUM uses strings on the wire. */
 public enum ValueType {
-    BOOLEAN, INTEGER, DECIMAL, TEXT
+    BOOLEAN, INTEGER, DECIMAL, TEXT, ENUM, ARRAY
 }

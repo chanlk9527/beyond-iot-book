@@ -22,7 +22,7 @@ import javax.sql.DataSource;
 public class ClusterCommandConfiguration {
     @Bean DurableCommands durableCommands(DataSource source,PlatformTransactionManager manager,EventBus bus,
             ObjectProvider<JdbcDeviceSessionDirectory> directory) {
-        if(directory.getIfAvailable()==null || !bus.supportsCluster())throw new IllegalStateException("Durable cluster commands require cluster membership and Kafka EventBus");
+        if(directory.getIfAvailable()==null || !bus.supportsCluster() || !bus.supportsDurablePublish())throw new IllegalStateException("Durable cluster commands require membership and durable event delivery");
         var jdbc=new JdbcTemplate(source);jdbc.setQueryTimeout(2);
         var tx=new TransactionTemplate(manager);tx.setTimeout(5);
         return new JdbcDurableCommands(jdbc,tx);
@@ -86,7 +86,7 @@ public class ClusterCommandConfiguration {
                             var now=Instant.now();
                             var envelope=new EventMessage(event.eventId(),event.topic(),now,now,event.tenantId(),event.deviceId(),"v1",event.messageId(),"APPLICATION",Map.of(),Map.of("schemaVersion",1));
                             var result=bus.publish(envelope).toCompletableFuture().get(5,TimeUnit.SECONDS);
-                            if(result.confirmation()!=PublishResult.Confirmation.BROKER_ACCEPTED)throw new IllegalStateException("Reliable broker confirmation required");
+                            if(!result.durable())throw new IllegalStateException("Durable event acceptance required");
                             commands.published(event.eventId());
                         }
                     }catch(Exception error){System.getLogger(getClass().getName()).log(System.Logger.Level.WARNING,"Command relay will retry durable pending work",error);}

@@ -218,10 +218,7 @@ public final class DeviceHistoryService {
         var expired=jdbc.query("SELECT id FROM device_history_inbox WHERE completed=TRUE AND received_at<? ORDER BY received_at LIMIT 1000",(rs,n)->rs.getString(1),clock.millis()-Duration.ofDays(7).toMillis());
         for(var id:expired) jdbc.update("DELETE FROM device_history_inbox WHERE id=? AND completed=TRUE",id);
     }
-    private JsonNode value(Value value) { return switch(value) {
-        case Value.BooleanValue v -> json.valueToTree(v.value()); case Value.IntegerValue v -> json.valueToTree(v.value());
-        case Value.DecimalValue v -> json.valueToTree(v.value()); case Value.TextValue v -> json.valueToTree(v.value());
-    }; }
+    private JsonNode value(Value value) { return com.nebula.iot.device.infrastructure.ValueJson.toJson(value); }
     private String encode(Object value) { try{return json.writeValueAsString(value);}catch(java.io.IOException e){throw new IllegalArgumentException("Invalid history data",e);} }
     private <T>T decode(String value,Class<T> type) { try{return json.readValue(value,type);}catch(java.io.IOException e){throw new IllegalStateException("Invalid stored history data",e);} }
     private static String hash(String value) { try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));}catch(java.security.NoSuchAlgorithmException e){throw new IllegalStateException(e);} }

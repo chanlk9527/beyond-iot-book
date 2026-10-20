@@ -24,4 +24,12 @@ public sealed interface Value {
         public TextValue { Objects.requireNonNull(value, "value"); }
         @Override public ValueType type() { return ValueType.TEXT; }
     }
-}
+    /** A single dimension; the schema validates the homogeneous element type. */
+    record ArrayValue(java.util.List<Value> value) implements Value {
+        public ArrayValue {
+            value = java.util.List.copyOf(value);
+            if (value.size() > 1000 || value.stream().anyMatch(v -> v instanceof ArrayValue))
+                throw new IllegalArgumentException("Arrays support at most 1000 scalar elements");
+        }
+        @Override public ValueType type() { return ValueType.ARRAY; }
+    }}

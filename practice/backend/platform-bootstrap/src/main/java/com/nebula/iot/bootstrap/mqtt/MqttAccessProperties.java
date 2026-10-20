@@ -13,7 +13,8 @@ public record MqttAccessProperties(@DefaultValue("true") boolean enabled,
         @DefaultValue("32") int maxInFlight, @DefaultValue("4") int workerThreads,
         @DefaultValue("256") int maxQueuedWork, @DefaultValue("5s") Duration authenticationTimeout,
         @DefaultValue("10s") Duration processingTimeout, @DefaultValue("5s") Duration acknowledgementTimeout,
-        @DefaultValue("false") boolean developmentMode, List<DevelopmentDevice> devices) {
+        @DefaultValue("false") boolean developmentMode, List<DevelopmentDevice> devices,
+        @DefaultValue("true") boolean websocketEnabled, @DefaultValue("-1") int websocketPort) {
     public MqttAccessProperties { devices = devices == null ? List.of() : List.copyOf(devices); }
 
     public record DevelopmentDevice(String tenantId, String deviceId, String productId,

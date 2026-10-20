@@ -5,6 +5,16 @@ import org.apache.ibatis.annotations.*;
 import java.util.List;
 
 public interface CatalogMapper extends CatalogRepository {
+ @Select("SELECT gateway_id FROM device_gateway_child WHERE scope_key=#{scope} AND child_id=#{childId}")
+ String parentGateway(@Param("scope")String scope,@Param("childId")String childId);
+ @Select("SELECT "+D+" FROM device_registration d JOIN device_product p ON p.id=d.product_id JOIN device_gateway_child c ON c.child_id=d.id AND c.scope_key=d.scope_key WHERE c.scope_key=#{scope} AND c.gateway_id=#{gatewayId} ORDER BY d.id LIMIT #{limit} OFFSET #{offset}")
+ List<DeviceRow> children(@Param("scope")String scope,@Param("gatewayId")String gatewayId,@Param("limit")int limit,@Param("offset")long offset);
+ @Select("SELECT COUNT(*) FROM device_gateway_child WHERE scope_key=#{scope} AND gateway_id=#{gatewayId}")
+ long childCount(@Param("scope")String scope,@Param("gatewayId")String gatewayId);
+ @Insert("INSERT INTO device_gateway_child(scope_key,gateway_id,child_id) VALUES(#{scope},#{gatewayId},#{childId})")
+ void bindChild(@Param("scope")String scope,@Param("gatewayId")String gatewayId,@Param("childId")String childId);
+ @Delete("DELETE FROM device_gateway_child WHERE scope_key=#{scope} AND gateway_id=#{gatewayId} AND child_id=#{childId}")
+ int unbindChild(@Param("scope")String scope,@Param("gatewayId")String gatewayId,@Param("childId")String childId);
  @Select("SELECT COUNT(*) FROM device_production_batch WHERE product_id=#{productId}") long productionBatches(String productId);
  @Select("SELECT COUNT(*) FROM device_production_item WHERE device_id=#{deviceId}") long productionItems(String deviceId);
  @Select("SELECT d.id,d.scope_key AS scopeKey,d.product_id AS productId,d.model_version AS modelVersion,d.credential_hash AS credentialHash,m.model_json AS modelJson FROM device_registration d JOIN device_product p ON p.id=d.product_id AND p.scope_key=d.scope_key JOIN device_model_version m ON m.product_id=d.product_id AND m.version=d.model_version LEFT JOIN tenant t ON t.id=d.tenant_id WHERE d.id=#{id} AND d.lifecycle='ACTIVE' AND p.enabled=TRUE AND (d.tenant_id IS NULL OR t.enabled=TRUE)")

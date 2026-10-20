@@ -8,7 +8,7 @@ Java 21 的普通 JAR，主代码只依赖 JDK。这里定义多个能力组件�
 | --- | --- |
 | identity | TenantId、DeviceId、ProductId、MessageId、CommandId；保留大小写与原始身份，不静默裁剪或自动生成编号 |
 | device | 带租户的设备／产品键、设备描述、生命周期、连接状态、DeviceRegistry 与 DeviceOperator |
-| model | 版本化产品模型、属性／事件／操作、字段与约束、不可变标量值、报告／读写／操作／事件校验 |
+| model | 版本化产品模型、属性／事件／操作、字段与约束、不可变标量与数组值、报告／读写／操作／事件校验 |
 | command | 带有效期的控制意图及通用DeviceDownlink、DeliveryReceipt、属性／配置／校时／OTA下行与执行阶段 |
 | message | 属性、事件、指令、信息、配置、校时、OTA上行与带replyTo／ReplyResult的信封 |
 | auth | 设备认证请求、明确的通过／拒绝结果及异步认证接口 |
@@ -28,13 +28,13 @@ Core 的类型是公共契约，不机械套用业务模块的五层目录。其
 
 ## 当前模型能力
 
-支持 BOOLEAN、INTEGER（long）、DECIMAL（BigDecimal）和 TEXT。数值范围为闭区间；文本长度按 Unicode 码点计算。DECIMAL 可接收整数值，INTEGER 不把小数或字符串自动转换为整数。
+支持 BOOLEAN、INTEGER（long）、DECIMAL（BigDecimal）、TEXT、ENUM 与 ARRAY。枚举使用字符串编码，数组使用统一元素类型且不支持嵌套数组；数值支持单位元数据。完整 JSON 定义和约束见 [物模型说明](../../docs/thing-model.md)。数值范围为闭区间；文本长度按 Unicode 码点计算。DECIMAL 可接收整数值，INTEGER 不把小数或字符串自动转换为整数。
 
 属性报告允许部分字段，但拒绝未知属性、不可报告属性、错误类型和越界数据。属性访问类型从平台读写角度定义，WRITE_ONLY 属性不作为可查询报告。事件和操作校验必填字段、未知字段和字段值；字段定义的索引键必须与标识一致。
 
 模型关联产品键与版本。处理报告或下发前，需要由调用方核对设备描述的产品和模型版本，查找精确模型后校验。构造消息并不会自动执行模型查找或业务权限校验。
 
-数组、对象、枚举、单位、复杂约束、模型兼容迁移及操作输出模式尚未实现，不能将当前类型称为完整物模型标准。物理效果与“执行完成”的证明条件仍由操作及实际协议约定。
+结构体、嵌套数组、模型兼容迁移及操作输出模式尚未实现，不能将当前类型称为完整物模型标准。物理效果与“执行完成”的证明条件仍由操作及实际协议约定。
 
 ## 不可混淆的语义
 
@@ -44,7 +44,7 @@ Core 的类型是公共契约，不机械套用业务模块的五层目录。其
 - DispatchReceipt 只表示传输接受工作，不表示设备收到或执行成功。DeviceOperator 的实现还需校验目标、生命周期、有效期和模型约束。
 - ExecutionStatus 只表示设备反馈的 ACCEPTED／SUCCEEDED／FAILED。等待超时由命令服务单独记录，不被当成设备执行失败。
 - occurredAt 与 receivedAt 分别记录来源时间和平台接收时间。设备时钟可能漂移，不强制来源时间早于接收时间，也不能只按时间戳判断跨重启消息顺序。
-- 模型、消息与输入 Map 复制为不可修改快照；标量值不可变。BinaryPayload 防御性复制字节，ProtocolPacket 的日志表示不包含报文内容和属性值。
+- 模型、消息与输入 Map 复制为不可修改快照；标量和数组值不可变。BinaryPayload 防御性复制字节，ProtocolPacket 的日志表示不包含报文内容和属性值。
 
 ## 协议接入顺序
 
@@ -52,7 +52,7 @@ Core 的类型是公共契约，不机械套用业务模块的五层目录。其
 2. DeviceAuthenticator 验证证明材料与设备策略，返回 Accepted(DeviceKey) 或 Rejected(code)。基础设施错误通过 CompletionStage 异常完成；认证成功不代表用户或应用资源授权。
 3. 接入组件查找设备描述和对应模型，创建 DecodeContext，并将原始报文交给该传输对应的 DeviceMessageCodec。
 4. Codec 返回 DecodedMessage，不能指定租户、设备或平台接收时间；接入组件用 context.bind 补齐统一信封，再做模型校验和路由。
-5. 连接变化由可信会话组件生成，设备解码结果不能生成 ConnectionChanged。网关代理子设备需要额外校验代理与子设备关系，当前不提供绕过关系校验的直接构造机制。
+5. 连接变化由可信会话组件生成，设备解码结果不能生成 ConnectionChanged。网关代理子设备通过接入层的 resolveChild 校验网关与子设备的实际绑定、同租户及启用资格，再为子设备绑定解码上下文；默认解析器拒绝代理。
 
 Decoder 是同步的本地映射接口，禁止在其中执行阻塞网络／存储 I/O。注册查询、设备操作与认证使用 JDK CompletionStage，具体执行器、线程调度和超时策略由实现组件负责。核心不依赖 Reactor 或特定 Broker，也不提供可靠消息交付保证。
 

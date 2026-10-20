@@ -29,6 +29,34 @@ class KafkaEventBusTest {
         var config = Map.<String, Object>of("bootstrap.servers", broker.getBrokersAsString());
         return new KafkaEventBus(TOPIC, FAILED, "test", node, config, config, Duration.ofSeconds(2));
     }
+    @Test void sourceScopesAreRejectedInsteadOfSilentlyFilteringSharedGroupRecords() {
+        try(var receiver=bus("scope-validation")){
+            for(var scope:List.of(SubscriptionSpec.SourceScope.LOCAL,SubscriptionSpec.SourceScope.REMOTE))
+                assertThrows(IllegalArgumentException.class,()->receiver.subscribe(
+                        SubscriptionSpec.shared("scoped","device/**").withSourceScope(scope),
+                        event->CompletableFuture.completedFuture(null)));
+        }
+    }
+
+    @Test void productSubscriptionsFilterTenantAndProductWithoutEnumeratingDevices() throws Exception {
+        var received = new CopyOnWriteArrayList<String>();
+        try (var receiver=bus("product-receiver"); var sender=bus("product-sender")) {
+            receiver.subscribe(SubscriptionSpec.shared("product-p1", "product-filter/**"),
+                    com.nebula.iot.message.routing.EventSelector.product("t1", "p1"), event -> {
+                        received.add((String)((Map<?,?>)event.payload()).get("device")); return CompletableFuture.completedFuture(null);
+                    });
+            await(() -> ready(receiver));
+            var now = java.time.Instant.now();
+            String[][] cases = {{"t1","p2","ignored-product"},{"t2","p1","ignored-tenant"},{"t1",null,"legacy"},{"t1","p1","d1"},{"t1","p1","new-device"}};
+            for (var item : cases) {
+                String id=java.util.UUID.randomUUID().toString();
+                sender.publish(new EventMessage(id, "product-filter/report", now, now, item[0], "partition-device", "v1", id,
+                        "DEVICE", Map.of(), Map.of("device",item[2]), item[1])).toCompletableFuture().get(10,TimeUnit.SECONDS);
+            }
+            await(() -> received.size()==2);
+            assertEquals(java.util.List.of("d1","new-device"),received);
+        }
+    }
 
     @Test void deferredLifecycleDoesNotConsumeBacklogBeforeDomainListenersAreReady() throws Exception {
         var received=new CompletableFuture<EventMessage>();

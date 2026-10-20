@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {schemaSummary,type ValueSchema} from './modelSchema'
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import type { DeviceDetail } from '../api/catalog'
@@ -7,9 +8,9 @@ import { useSessionStore } from '../stores/session'
 import {stableModel} from './modelVersions'
 const props=defineProps<{detail:DeviceDetail;scope:string}>()
 const router=useRouter(),session=useSessionStore()
-type Schema={type:string;minimum?:number|null;maximum?:number|null;maxLength?:number|null}
-type Field={id:string;schema:Schema;required:boolean}
-type Property={id:string;schema:Schema;access:string}
+type Schema=ValueSchema
+type Field={id:string;name?:string;schema:Schema;required:boolean}
+type Property={id:string;name?:string;schema:Schema;access:string}
 type Operation={id:string;inputs:Record<string,Field>}
 type Event={id:string;fields:Record<string,Field>}
 const model=computed(()=>props.detail.model.model)
@@ -21,10 +22,9 @@ const draftChanged=computed(()=>stableModel(props.detail.product.draft)!==stable
 const newerPublished=computed(()=>props.detail.product.latestVersion&&props.detail.product.latestVersion!==props.detail.model.version)
 const hasDraft=computed(()=>Object.values(props.detail.product.draft).some(definitions=>Object.keys(definitions).length>0))
 const canOpenProduct=computed(()=>session.can('page:products')&&session.can('product:read'))
-const types:Record<string,string>={BOOLEAN:'布尔值',INTEGER:'整数',DECIMAL:'小数',TEXT:'文本'}
 const access:Record<string,string>={READ_ONLY:'只读',WRITE_ONLY:'只写',READ_WRITE:'读写'}
-function schemaText(s:Schema){return (types[s.type]||s.type)+(s.minimum!=null||s.maximum!=null?' · '+(s.minimum??'不限')+' ～ '+(s.maximum??'不限'):'')+(s.maxLength!=null?' · 最长 '+s.maxLength+' 字符':'')}
-function fieldsText(fields:Record<string,Field>){return Object.values(fields).map(f=>f.id+'（'+schemaText(f.schema)+(f.required?'，必填':'，选填')+'）').join('；')||'无参数'}
+const schemaText=schemaSummary
+function fieldsText(fields:Record<string,Field>){return Object.values(fields).map(f=>(f.name?f.name+' ['+f.id+']':f.id)+'（'+schemaText(f.schema)+(f.required?'，必填':'，选填')+'）').join('；')||'无参数'}
 function openProduct(tab:string){void router.push({path:resourceScope(props.scope,props.detail.product)+'/products/'+encodeURIComponent(props.detail.product.id),query:{tab}})}
 </script>
 <template>
@@ -38,9 +38,9 @@ function openProduct(tab:string){void router.push({path:resourceScope(props.scop
   <div class="capability-counts"><span>{{properties.length}} 项属性</span><span>{{operations.length}} 项操作</span><span>{{events.length}} 项事件</span></div>
   <div v-if="empty" class="empty-model"><h3>当前绑定版本未定义任何能力</h3><p>产品 {{detail.product.name}} 的 {{detail.model.version}} 发布时为空模型。此处显示已发布版本，不会自动使用产品草稿。</p></div>
   <template v-else>
-   <h3>属性</h3><el-table :data="properties" empty-text="该版本未定义属性"><el-table-column prop="id" label="标识符" min-width="160"/><el-table-column label="类型与约束" min-width="240"><template #default="{row}">{{schemaText(row.schema)}}</template></el-table-column><el-table-column label="访问方式" width="120"><template #default="{row}">{{access[row.access]||row.access}}</template></el-table-column></el-table>
-   <h3>操作</h3><el-table :data="operations" empty-text="该版本未定义操作"><el-table-column prop="id" label="标识符" min-width="160"/><el-table-column label="输入参数" min-width="300"><template #default="{row}">{{fieldsText(row.inputs)}}</template></el-table-column></el-table>
-   <h3>事件</h3><el-table :data="events" empty-text="该版本未定义事件"><el-table-column prop="id" label="标识符" min-width="160"/><el-table-column label="事件字段" min-width="300"><template #default="{row}">{{fieldsText(row.fields)}}</template></el-table-column></el-table>
+   <h3>属性</h3><el-table :data="properties" empty-text="该版本未定义属性"><el-table-column prop="name" label="名称" min-width="140"/><el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip/><el-table-column prop="id" label="标识符" min-width="160"/><el-table-column label="类型与约束" min-width="240"><template #default="{row}">{{schemaText(row.schema)}}</template></el-table-column><el-table-column label="访问方式" width="120"><template #default="{row}">{{access[row.access]||row.access}}</template></el-table-column></el-table>
+   <h3>操作</h3><el-table :data="operations" empty-text="该版本未定义操作"><el-table-column prop="name" label="名称" min-width="140"/><el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip/><el-table-column prop="id" label="标识符" min-width="160"/><el-table-column label="输入参数" min-width="300"><template #default="{row}">{{fieldsText(row.inputs)}}</template></el-table-column></el-table>
+   <h3>事件</h3><el-table :data="events" empty-text="该版本未定义事件"><el-table-column prop="name" label="名称" min-width="140"/><el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip/><el-table-column prop="id" label="标识符" min-width="160"/><el-table-column label="事件字段" min-width="300"><template #default="{row}">{{fieldsText(row.fields)}}</template></el-table-column></el-table>
   </template>
  </div>
 </template>

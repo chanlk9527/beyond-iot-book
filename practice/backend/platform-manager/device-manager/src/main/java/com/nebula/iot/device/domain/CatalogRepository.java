@@ -2,6 +2,11 @@ package com.nebula.iot.device.domain;
 import com.nebula.iot.device.domain.CatalogRows.*;
 import java.util.List;
 public interface CatalogRepository {
+ String parentGateway(String scope,String childId);
+ List<DeviceRow> children(String scope,String gatewayId,int limit,long offset);
+ long childCount(String scope,String gatewayId);
+ void bindChild(String scope,String gatewayId,String childId);
+ int unbindChild(String scope,String gatewayId,String childId);
  ConnectionRow connection(String id);
  long productionBatches(String productId);
  long productionItems(String deviceId);

@@ -33,6 +33,7 @@ const router = createRouter({
       { path: 'access', name: 'access', component: () => import('../views/AccessManagementView.vue'), meta: { title: '权限管理' } },
       ...accessPages.map(page => ({ path: page.path.slice(1), name: page.code, component: () => import('../views/AccessManagementView.vue'), meta: { title: page.name, permission: page.code } })),
       { path: 'platform/access-nodes', name: 'access-nodes', component: () => import('../views/AccessNodesView.vue'), meta: { title: '设备接入', platformAdminOnly: true } },
+      { path: 'platform/eventbus', name: 'eventbus', component: () => import('../views/EventBusView.vue'), meta: { title: '事件总线', platformAdminOnly: true } },
       { path: 'platform/tenants', name: 'tenants', component: () => import('../views/TenantsView.vue'), meta: { title: '租户管理', permission: 'page:tenants' } },
       { path: 'platform/tenants/:tenantId', name: 'tenant-management', component: () => import('../views/TenantManagementView.vue'), meta: { title: '租户详情', permission: 'page:tenants' } },
       { path: 'tenants', redirect: '/catalog' },

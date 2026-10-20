@@ -25,6 +25,7 @@ class MqttBootstrapTest {
     void startsConfiguredGatewayAndReportsItsHealth() {
         assertTrue(gateway.isRunning());
         assertTrue(gateway.actualPort() > 0);
+        assertTrue(gateway.actualWebSocketPort() > 0);
         assertEquals("UP", health.health().getStatus().getCode());
         assertTrue(inbox.snapshot().isEmpty());
     }

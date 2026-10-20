@@ -8,7 +8,16 @@ import java.util.UUID;
 /** Immutable platform event envelope shared by local and future clustered buses. */
 public record EventMessage(String eventId, String topic, Instant occurredAt, Instant receivedAt,
                            String tenantId, String deviceId, String modelVersion, String messageId,
-                           String source, Map<String, String> headers, Object payload) {
+                           String source, Map<String, String> headers, Object payload,
+                           @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                           String productId) {
+    /** Legacy events have no product metadata and do not match product-scoped subscriptions. */
+    public EventMessage(String eventId, String topic, Instant occurredAt, Instant receivedAt,
+                        String tenantId, String deviceId, String modelVersion, String messageId,
+                        String source, Map<String, String> headers, Object payload) {
+        this(eventId, topic, occurredAt, receivedAt, tenantId, deviceId, modelVersion, messageId,
+                source, headers, payload, null);
+    }
     public EventMessage {
         eventId = required(eventId, "eventId"); topic = TopicPattern.validate(topic);
         Objects.requireNonNull(occurredAt, "occurredAt"); Objects.requireNonNull(receivedAt, "receivedAt");
@@ -16,6 +25,7 @@ public record EventMessage(String eventId, String topic, Instant occurredAt, Ins
         modelVersion = required(modelVersion, "modelVersion"); messageId = required(messageId, "messageId");
         source = required(source, "source"); headers = headers == null ? Map.of() : Map.copyOf(headers);
         Objects.requireNonNull(payload, "payload");
+        if (productId != null) productId = required(productId, "productId");
     }
     public static EventMessage of(String topic, Object payload) {
         var now = Instant.now(); var id = UUID.randomUUID().toString();

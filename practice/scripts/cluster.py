@@ -146,8 +146,13 @@ def main():
         for name in names:
             if not args.build and not artifacts[name].is_file():
                 raise ValueError(f'{name}: artifact missing; use --build.')
-            for port in [PORTS[name]] + ([1884 if name == 'access-b' else 1883] if name.startswith('access') else []):
-                if occupied(port) and not owned(name) and not (combined and args.replace_combined and port in (8080, 1883)):
+            ports = [PORTS[name]]
+            if name.startswith('access'):
+                ports.append(1884 if name == 'access-b' else 1883)
+                if env.get('MQTT_WEBSOCKET_ENABLED') != 'false':
+                    ports.append(8085 if name == 'access-b' else 8084)
+            for port in ports:
+                if occupied(port) and not owned(name) and not (combined and args.replace_combined and port in (8080, 1883, 8084)):
                     raise ValueError(f'Port {port} belongs to an unmanaged process; no process was stopped.')
         if args.validate_only:
             print('Cluster preflight passed; no services or containers changed.')
@@ -184,7 +189,7 @@ def main():
                     if role == 'management' and args.migrate_out_of_order:
                         command.append('--spring.flyway.out-of-order=true')
                     if role == 'access':
-                        command += ['--nebula.mqtt.host=127.0.0.1', f'--nebula.mqtt.port={1884 if name == "access-b" else 1883}']
+                        command += ['--nebula.mqtt.host=127.0.0.1', f'--nebula.mqtt.port={1884 if name == "access-b" else 1883}', f'--nebula.mqtt.websocket-port={8085 if name == "access-b" else 8084}']
                     with (folder / 'stdout.log').open('w') as out, (folder / 'stderr.log').open('w') as err:
                         process = subprocess.Popen(command, cwd=BACKEND, env=child_env, stdin=subprocess.DEVNULL, stdout=out, stderr=err, start_new_session=True)
                     started.append(name)

@@ -98,4 +98,38 @@ class DeviceModelTest {
         assertDoesNotThrow(() -> text.validate(new Value.TextValue("\uD83D\uDCA1")));
         assertThrows(IllegalArgumentException.class, () -> text.validate(new Value.TextValue("ab")));
     }
+    @Test
+    void enumsAndArraysValidateTheirWireValues() {
+        var options = new HashMap<>(Map.of("heat", "加热", "warm", "保温"));
+        var schema = new ValueSchema(ValueType.ENUM, null, null, null, options, null);
+        options.clear();
+        assertEquals(2, schema.enumValues().size());
+        assertDoesNotThrow(() -> schema.validate(new Value.TextValue("heat")));
+        assertThrows(IllegalArgumentException.class, () -> schema.validate(new Value.TextValue("unknown")));
+        assertThrows(IllegalArgumentException.class, () -> schema.validate(new Value.IntegerValue(1)));
+        assertThrows(IllegalArgumentException.class, () -> ValueSchema.of(ValueType.ENUM));
+        assertThrows(IllegalArgumentException.class, () -> new ValueSchema(ValueType.TEXT, null, null, null, Map.of("a", "A"), ""));
+        var items = new ValueSchema(ValueType.INTEGER, BigDecimal.ZERO, BigDecimal.TEN, null);
+        var array = new ValueSchema(ValueType.ARRAY, null, null, null, null, null, items, 1, 2);
+        assertDoesNotThrow(() -> array.validate(new Value.ArrayValue(java.util.List.of(new Value.IntegerValue(3)))));
+        assertThrows(IllegalArgumentException.class, () -> array.validate(new Value.ArrayValue(java.util.List.of())));
+        assertThrows(IllegalArgumentException.class, () -> array.validate(new Value.ArrayValue(java.util.List.of(new Value.IntegerValue(11)))));
+        assertThrows(IllegalArgumentException.class, () -> array.validate(new Value.ArrayValue(java.util.List.of(new Value.TextValue("3")))));
+        assertThrows(IllegalArgumentException.class, () -> array.validate(new Value.ArrayValue(java.util.List.of(new Value.IntegerValue(1), new Value.IntegerValue(2), new Value.IntegerValue(3)))));
+        assertThrows(IllegalArgumentException.class, () -> ValueSchema.of(ValueType.ARRAY));
+        assertThrows(IllegalArgumentException.class, () -> new ValueSchema(ValueType.ARRAY, null, null, null, null, null, array, 0, 10));
+        assertThrows(IllegalArgumentException.class, () -> new ValueSchema(ValueType.ARRAY, null, null, null, null, null, items, 5, 2));
+        assertThrows(IllegalArgumentException.class, () -> new Value.ArrayValue(java.util.List.of(new Value.ArrayValue(java.util.List.of()))));
+    }
+    @Test
+    void metadataSupportsLegacyModelsAndLimitsUserInput() {
+        assertEquals("", new OperationDefinition("run", Map.of()).name());
+        assertEquals("", new PropertyDefinition("power", ValueSchema.of(ValueType.BOOLEAN), PropertyAccess.READ_WRITE).description());
+        var schema = new ValueSchema(ValueType.DECIMAL, null, null, null, null, "℃");
+        var property = new PropertyDefinition("temperature", schema, PropertyAccess.READ_ONLY, "温度", "当前测量温度");
+        assertEquals("温度", property.name());
+        assertEquals("℃", property.schema().unit());
+        assertThrows(IllegalArgumentException.class, () -> new EventDefinition("alarm", Map.of(), "x".repeat(101), ""));
+        assertThrows(IllegalArgumentException.class, () -> new ValueSchema(ValueType.BOOLEAN, null, null, null, null, "℃"));
+    }
 }

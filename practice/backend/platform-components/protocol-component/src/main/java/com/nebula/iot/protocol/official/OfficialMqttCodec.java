@@ -31,6 +31,32 @@ public final class OfficialMqttCodec implements DeviceMessageCodec {
     public OfficialMqttCodec(Clock clock) { this.clock = Objects.requireNonNull(clock); }
 
     @Override
+    public Optional<ChildRoute> childRoute(ProtocolPacket packet) {
+        var topic = packet.attributes().get("topic");
+        if (topic == null || !topic.startsWith("nebula/v1/child/")) return Optional.empty();
+        var parts = topic.split("/", -1);
+        if (parts.length != 5 || !parts[3].matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}")) throw invalid("Invalid child topic");
+        var action = switch (parts[4]) {
+            case "up" -> ChildRoute.Action.MESSAGE;
+            case "online" -> ChildRoute.Action.ONLINE;
+            case "offline" -> ChildRoute.Action.OFFLINE;
+            default -> throw invalid("Invalid child topic direction");
+        };
+        if (action != ChildRoute.Action.MESSAGE &&
+                !Arrays.equals(packet.payload().copyBytes(), new byte[] {'{', '}'})) throw invalid("Child state payload must be {}");
+        return Optional.of(new ChildRoute(new com.nebula.iot.core.identity.DeviceId(parts[3]), action,
+                new ProtocolPacket(packet.payload(), Map.of("topic", UPLINK_TOPIC))));
+    }
+
+    @Override
+    public ProtocolPacket encodeChild(DeviceDownlink message, Transport transport) {
+        var packet = encode(message, transport);
+        var id = message.device().deviceId().value();
+        if (!id.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}")) throw invalid("Invalid child identity");
+        return new ProtocolPacket(packet.payload(), Map.of("topic", "nebula/v1/child/" + id + "/down"));
+    }
+
+    @Override
     public List<DecodedMessage> decode(ProtocolPacket packet, DecodeContext context) {
         if (!Transport.MQTT.equals(context.transport()) || !UPLINK_TOPIC.equals(packet.attributes().get("topic"))) throw invalid("不支持的传输或上行Topic");
         if (packet.payload().size() > MAX_PAYLOAD_BYTES) throw invalid("载荷超过60KiB");
@@ -193,24 +219,14 @@ public final class OfficialMqttCodec implements DeviceMessageCodec {
         var result = new LinkedHashMap<String, Value>();
         object.fields().forEachRemaining(entry -> {
             identifier(entry.getKey()); var value = entry.getValue();
-            Value scalar;
-            if (value.isBoolean()) scalar = new Value.BooleanValue(value.booleanValue());
-            else if (value.isIntegralNumber() && value.canConvertToLong()) scalar = new Value.IntegerValue(value.longValue());
-            else if (value.isFloatingPointNumber()) scalar = new Value.DecimalValue(value.decimalValue());
-            else if (value.isTextual()) scalar = new Value.TextValue(value.textValue());
-            else throw invalid("字段仅支持布尔、64位整数、小数和文本");
+            Value scalar = com.nebula.iot.protocol.ValueJson.fromJson(value);
             result.put(entry.getKey(), scalar);
         }); return result;
     }
     private void putValues(ObjectNode parent, String name, Map<String, Value> values) {
         if (values.size() > 256) throw invalid("字段数量超过256");
         var object = parent.putObject(name);
-        values.forEach((key, value) -> object.set(identifier(key), switch (value) {
-            case Value.BooleanValue bool -> BooleanNode.valueOf(bool.value());
-            case Value.IntegerValue integer -> LongNode.valueOf(integer.value());
-            case Value.DecimalValue decimal -> DecimalNode.valueOf(decimal.value());
-            case Value.TextValue text -> TextNode.valueOf(text.value());
-        }));
+        values.forEach((key, value) -> object.set(identifier(key), com.nebula.iot.protocol.ValueJson.toJson(value)));
     }
     private static IllegalArgumentException invalid(String message) { return new IllegalArgumentException(message); }
 }

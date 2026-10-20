@@ -54,7 +54,7 @@ KAFKA_BOOTSTRAP_SERVERS=localhost:9092
 
 需要 PowerShell 7、JDK 21、Maven 3.6.3+ 和 Node.js 24。在 `practice/` 目录执行；脚本内部使用绝对路径，也可以从仓库根目录运行 `./practice/Manage.ps1`。
 
-先复制 `backend/.env.example` 为 `backend/.env.local`，填写 PostgreSQL 配置。文件按 `KEY=value` 原样读取，不执行配置内容，不写入系统环境变量。
+先复制 `backend/.env.example` 为 `backend/.env.local`，填写 PostgreSQL 或 MySQL 连接配置。文件按 `KEY=value` 原样读取，不执行配置内容，不写入系统环境变量。
 
 ```powershell
 # 日常启动：复用已有 JAR 和 node_modules，前后端并行启动
@@ -101,7 +101,7 @@ KAFKA_BOOTSTRAP_SERVERS=localhost:9092
 
 本机安全工具可能让不同进程看到不同文件视图。若构建出现既有模块类不可见，或 esbuild 报无法读取已存在的 `vite.config.ts`，应检查运行进程的透明解密能力和访问权限。修改控制台代码页无法解决此问题。
 
-Redis 配置也由同一 `.env.local` 加载：取消示例中 `REDIS_ENABLED` 和 `REDIS_URL` 的注释，填写 Upstash 的 `rediss://` Redis TCP 连接地址。HTTPS REST 地址与 REST token 不用于此连接。以后自建 Redis 只替换 URL；当前仅准备连接与健康检查，业务缓存和 Session 尚未迁移到 Redis。Redis 关闭时不需要此服务。
+Redis 配置也由同一 `.env.local` 加载：取消示例中 `REDIS_ENABLED` 和 `REDIS_URL` 的注释，填写 Upstash 的 `rediss://` Redis TCP 连接地址。HTTPS REST 地址与 REST token 不用于此连接。以后自建 Redis 只替换 URL；设备影子和设备模型缓存已使用 Redis，登录 Session 与实时票据仍在本机内存。Redis 关闭时不需要此服务。
 
 ## macOS 三服务快捷启动
 

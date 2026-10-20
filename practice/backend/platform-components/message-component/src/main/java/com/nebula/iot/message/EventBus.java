@@ -11,4 +11,10 @@ public interface EventBus {
     CompletionStage<PublishResult> publish(EventMessage event);
     default CompletionStage<PublishResult> publish(String topic, Object payload) { return publish(EventMessage.of(topic, payload)); }
     default boolean supportsCluster() { return false; }
+    default boolean supportsDurablePublish() { return false; }
+    default Subscription subscribe(SubscriptionSpec spec, com.nebula.iot.message.routing.EventSelector selector, EventSubscriber subscriber) {
+        if (!selector.equals(com.nebula.iot.message.routing.EventSelector.all()))
+            throw new UnsupportedOperationException("This event bus does not support resource selectors");
+        return subscribe(spec, subscriber);
+    }
 }

@@ -5,6 +5,9 @@ spring:
 server:
   port: ${SERVER_PORT:${nebula.service.http-port}}
 nebula:
+  cluster:
+    commands:
+      enabled: true
   eventbus:
     mode: ${EVENTBUS_MODE:kafka}
   redis:

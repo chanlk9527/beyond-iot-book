@@ -21,6 +21,10 @@ public class CatalogController {
  public record Registration(String productId,String code,String name,String modelVersion){}
  public record DeviceUpdate(String name,String lifecycle,Long revision){}
  public record Rotate(Long revision){}
+ public record GatewayBinding(String gatewayId,Long revision){}
+ @GetMapping("/devices/{id}/topology") public CatalogService.GatewayTopology topology(Principal actor,@PathVariable(required=false)String tenantId,@PathVariable String id,@RequestParam(defaultValue="1")int page,@RequestParam(defaultValue="20")int size){return service.topology(actor.getName(),tenantId,id,page,size);}
+ @PutMapping("/devices/{id}/gateway") public CatalogService.GatewayTopology bindGateway(Principal actor,@PathVariable(required=false)String tenantId,@PathVariable String id,@RequestBody GatewayBinding input){return service.bindGateway(actor.getName(),tenantId,id,input.gatewayId(),input.revision());}
+ @DeleteMapping("/devices/{id}/gateway") public CatalogService.GatewayTopology unbindGateway(Principal actor,@PathVariable(required=false)String tenantId,@PathVariable String id,@RequestParam String gatewayId,@RequestParam Long revision){return service.unbindGateway(actor.getName(),tenantId,id,gatewayId,revision);}
  @GetMapping("/categories") public com.nebula.iot.device.api.ProductDirectory categories(Principal actor,@PathVariable(required=false)String tenantId){return service.directory(actor.getName(),tenantId);}
  @PutMapping("/categories") public com.nebula.iot.device.api.ProductDirectory categories(Principal actor,@PathVariable(required=false)String tenantId,@RequestBody com.nebula.iot.device.api.ProductDirectory input){return service.saveDirectory(actor.getName(),tenantId,input);}
  @GetMapping("/products") public Page<Product> products(Principal actor,@PathVariable(required=false)String tenantId,@RequestParam(defaultValue="")String query,@RequestParam(defaultValue="1")int page,@RequestParam(defaultValue="20")int size,@RequestParam(defaultValue="")String category){return service.products(actor.getName(),tenantId,query,page,size,category);}

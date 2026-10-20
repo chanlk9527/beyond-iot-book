@@ -16,7 +16,7 @@ class EventJsonCodecTest {
     @Test void preservesEnvelopeAndTypedDeviceValues() {
         var values = Map.<String, Value>of("bool", new Value.BooleanValue(true),
                 "int", new Value.IntegerValue(Long.MAX_VALUE), "decimal", new Value.DecimalValue(new BigDecimal("25.1234567890123456789")),
-                "text", new Value.TextValue("中文"));
+                "text", new Value.TextValue("中文"), "array", new Value.ArrayValue(List.of(new Value.IntegerValue(1), new Value.IntegerValue(2))));
         var now = Instant.now();
         var event = new EventMessage("e1", "device/d001/property/report", now, now,
                 "tenant-a", "d001", "v2", "m1", "DEVICE", Map.of("traceId", "t1"),

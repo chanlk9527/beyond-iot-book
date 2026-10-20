@@ -10,6 +10,7 @@ vi.mock('../stores/session',()=>({useSessionStore:()=>({account:{platformAdmin:t
 vi.mock('element-plus',()=>({ElMessage:{success:vi.fn()},ElMessageBox:{confirm:vi.fn()}}))
 vi.mock('../api/catalog',async original=>({...await original<typeof import('../api/catalog')>(),catalogApi:{detail:vi.fn(),runtime:vi.fn()}}))
 vi.mock('../components/CatalogNavigation.vue',()=>({default:defineComponent(()=>()=>null)}))
+vi.mock('../components/DeviceDebugPanel.vue',()=>({default:defineComponent({setup:()=>()=>h('div',{'data-debug':true},'统一设备调试')})}))
 vi.mock('../components/DeviceShadowPanel.vue',()=>({default:defineComponent({props:['model'],setup:p=>()=>h('div',{'data-state':true},JSON.stringify(p.model))})}))
 vi.mock('../components/DeviceHistoryPanel.vue',()=>({default:defineComponent({props:{initialKind:String,eventOnly:Boolean},setup:p=>()=>h('div',{'data-history':p.initialKind||'PROPERTY','data-events-only':!!p.eventOnly},'真实历史查询')})}))
 const empty=():ModelSpec=>({properties:{},events:{},operations:{}})
@@ -84,3 +85,18 @@ it('does not offer product navigation without product-page authorization',async(
  expect(root.textContent).not.toContain('查看产品物模型草稿')
 })
 
+it('uses the shared detail shell for identity and workspace content',async()=>{
+ const root=mount();await settle()
+ expect(root.querySelector('.detail-shell')).toBeTruthy()
+ expect(root.querySelector('.detail-header')).toBeTruthy()
+ expect(root.querySelector('.detail-body')).toBeTruthy()
+})
+
+it('merges platform control and simulation into one persistent debug tab',async()=>{
+ const root=mount();await settle()
+ const labels=[...root.querySelectorAll('nav button')].map(n=>n.textContent)
+ expect(labels).toContain('设备调试');expect(labels).not.toContain('设备控制');expect(labels).not.toContain('设备模拟')
+ await tab(root,'debug');const workspace=root.querySelector<HTMLElement>('[data-debug]')!;expect(workspace).not.toBeNull()
+ await tab(root,'state');expect(root.querySelector('[data-debug]')).toBe(workspace);expect(workspace.style.display).toBe('none')
+ await tab(root,'debug');expect(root.querySelector('[data-debug]')).toBe(workspace);expect(workspace.style.display).not.toBe('none')
+})

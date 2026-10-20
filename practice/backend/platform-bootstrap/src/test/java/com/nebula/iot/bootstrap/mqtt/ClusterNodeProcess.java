@@ -20,7 +20,13 @@ public final class ClusterNodeProcess {
                 "--nebula.management.initial-account.password=test-password",
                 "--nebula.management.initial-account.platform-admin=true"));
         if(args.length>3) {
-            options.add("--nebula.cluster.commands.enabled=true");options.add("--nebula.eventbus.mode=kafka");
+            options.add("--nebula.cluster.commands.enabled=true");options.add("--nebula.eventbus.mode="+(args[3].equals("dubbo")?"dubbo":"kafka"));
+            if(args[3].equals("dubbo")) {
+                try(var socket=new java.net.ServerSocket(0)) { options.add("--nebula.eventbus.dubbo.port="+socket.getLocalPort()); }
+                catch(java.io.IOException error){throw new IllegalStateException(error);}
+                options.add("--nebula.eventbus.dubbo.host=127.0.0.1");options.add("--nebula.eventbus.dubbo.discovery=jdbc");
+                options.add("--nebula.eventbus.dubbo.credential=isolated-test-only-dubbo-credential-32");
+            }
             options.add("--spring.kafka.bootstrap-servers="+args[3]);
             options.add("--nebula.eventbus.topic=commands-test");options.add("--nebula.eventbus.failure-topic=commands-failed");
             options.add("--nebula.eventbus.namespace=commands-test");

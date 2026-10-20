@@ -9,11 +9,17 @@ import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(KafkaProperties.class)
 public class MessageConfiguration {
     @Bean
+    @ConditionalOnProperty(name="nebula.eventbus.mode", havingValue="local", matchIfMissing=true)
+    EventBus localEventBus() { return new LocalEventBus(); }
+
+    @Bean
+    @ConditionalOnProperty(name="nebula.eventbus.mode", havingValue="kafka")
     EventBus eventBus(KafkaProperties kafka,
             @Value("${nebula.eventbus.mode:local}") String mode,
             @Value("${nebula.eventbus.topic:iot.platform.events.v1}") String topic,

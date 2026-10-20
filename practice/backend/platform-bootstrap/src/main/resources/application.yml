@@ -43,6 +43,19 @@ nebula:
     topic: ${EVENTBUS_TOPIC:iot.platform.events.v1}
     failure-topic: ${EVENTBUS_FAILURE_TOPIC:iot.platform.events.failed.v1}
     handler-timeout: 30s
+    dubbo:
+      host: ${EVENTBUS_DUBBO_HOST:127.0.0.1}
+      port: ${EVENTBUS_DUBBO_PORT:20880}
+      credential: ${EVENTBUS_DUBBO_CREDENTIAL:}
+      maximum-pending: ${EVENTBUS_MAXIMUM_PENDING:100000}
+      discovery: ${EVENTBUS_DUBBO_DISCOVERY:nacos}
+      nacos:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: ${NACOS_GROUP:BEYOND_IOT}
+        service: ${NACOS_EVENTBUS_SERVICE:nebula-eventbus}
+        username: ${NACOS_USERNAME:}
+        password: ${NACOS_PASSWORD:}
   management:
     enabled: false
   redis:
@@ -51,3 +64,5 @@ nebula:
     node-name: ${ACCESS_NODE_NAME:local-access}
   mqtt:
     enabled: ${MQTT_ENABLED:true}
+    websocket-enabled: ${MQTT_WEBSOCKET_ENABLED:true}
+    websocket-port: ${MQTT_WEBSOCKET_PORT:-1}

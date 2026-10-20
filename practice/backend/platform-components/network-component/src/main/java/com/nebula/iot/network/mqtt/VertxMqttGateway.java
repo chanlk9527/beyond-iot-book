@@ -69,7 +69,7 @@ public final class VertxMqttGateway implements DeviceAccessGateway {
     public boolean acceptsConnections() { return running && acceptingConnections && admissionGuard.getAsBoolean(); }
     public CompletionStage<Integer> disconnectBatch(int limit) {
         if (limit < 1) throw new IllegalArgumentException("Positive batch size required");
-        var selected = sessions.values().stream().filter(session -> !session.closed).limit(limit).toList();
+        var selected = sessions.values().stream().filter(session -> !session.closed && session.parent == null).limit(limit).toList();
         var actions = selected.stream().map(session -> {
             var done = new CompletableFuture<Void>();
             session.context.runOnContext(ignored -> { disconnect(session, MqttDisconnectReasonCode.SERVER_SHUTTING_DOWN); done.complete(null); });
@@ -79,6 +79,15 @@ public final class VertxMqttGateway implements DeviceAccessGateway {
     }
     private volatile boolean running;
     private volatile MqttServer server;
+    private volatile MqttServer websocketServer;
+    private Integer websocketPort;
+    /** Both transports share authentication, sessions, limits and message handling. Configure before start. */
+    public synchronized void enableWebSocket(int port) {
+        if (running || (starting != null && !starting.isDone())) throw new IllegalStateException("Gateway already started");
+        if (port < 0 || port > 65535) throw new IllegalArgumentException("Invalid WebSocket port");
+        websocketPort = port;
+    }
+    public int actualWebSocketPort() { return running && websocketServer != null ? websocketServer.actualPort() : -1; }
     private volatile ExecutorService workers;
     private CompletableFuture<Void> starting;
     private CompletableFuture<Void> stopping;
@@ -132,18 +141,29 @@ public final class VertxMqttGateway implements DeviceAccessGateway {
         var candidate = MqttServer.create(vertx, new MqttServerOptions().setHost(options.host()).setPort(options.port())
                 .setAutoClientId(false).setMaxClientIdLength(256).setMaxMessageSize(options.maxMessageBytes()));
         server = candidate;
-        candidate.endpointHandler(this::onConnect).listen().onComplete(ar -> {
+        var tcpListen = candidate.endpointHandler(this::onConnect).listen();
+        var listeners = tcpListen.compose(tcp -> {
+            if (websocketPort == null) return io.vertx.core.Future.succeededFuture();
+            websocketServer = MqttServer.create(vertx, new MqttServerOptions().setHost(options.host()).setPort(websocketPort)
+                    .setUseWebSocket(true).setAutoClientId(false).setMaxClientIdLength(256).setMaxMessageSize(options.maxMessageBytes()));
+            return websocketServer.endpointHandler(this::onConnect).listen().mapEmpty();
+        });
+        listeners.onComplete(ar -> {
             synchronized (this) {
                 if (ar.succeeded()) {
                     running = true;
                     LOG.log(System.Logger.Level.INFO, "MQTT gateway started host={0} port={1}", options.host(), Integer.toString(candidate.actualPort()));
-                    if (ownership != null) ownershipTimer = vertx.setPeriodic(500, ignored -> maintainOwnership());
+                    ownershipTimer = vertx.setPeriodic(500, ignored -> maintainOwnership());
                     result.complete(null);
                 } else {
-                    candidate.close();
-                    server = null;
-                    workers.shutdown();
-                    result.completeExceptionally(ar.cause());
+                    var closing = new ArrayList<io.vertx.core.Future<?>>();
+                    closing.add(candidate.close());
+                    if (websocketServer != null) closing.add(websocketServer.close());
+                    io.vertx.core.Future.all(closing).onComplete(closed -> {
+                        server = null; websocketServer = null;
+                        workers.shutdown();
+                        result.completeExceptionally(ar.cause());
+                    });
                 }
             }
         });
@@ -166,7 +186,10 @@ public final class VertxMqttGateway implements DeviceAccessGateway {
         var current = server;
         server = null;
         connections.forEach(VertxMqttGateway::closeEndpoint);
-        current.close().onComplete(ar -> {
+        var closing = new ArrayList<io.vertx.core.Future<?>>();
+        closing.add(current.close());
+        if (websocketServer != null) { closing.add(websocketServer.close()); websocketServer = null; }
+        io.vertx.core.Future.all(closing).onComplete(ar -> {
             List.copyOf(sessions.values()).forEach(session -> closeSession(session, new IllegalStateException("Gateway stopped")));
             workers.shutdown();
             sessions.clear();
@@ -288,20 +311,24 @@ public final class VertxMqttGateway implements DeviceAccessGateway {
             if (!current(session)) return CompletableFuture.failedFuture(new IllegalStateException("会话已失效"));
             refreshOwnership(session);
             return resolveActive(session.key).thenCompose(access -> {
-                var decodeContext = new DecodeContext(session.key, Transport.MQTT, access.device().modelVersion(), receivedAt);
-                var decoded = List.copyOf(codec.decode(packet, decodeContext));
-                if (decoded.size() > 64) throw new IllegalArgumentException("单个报文消息过多");
-                CompletionStage<Void> chain = CompletableFuture.completedFuture(null);
-                for (var item : decoded) {
-                    var enriched = decodeContext.bind(item);
-                    if (enriched.body() instanceof DeviceMessageBody.PropertyReport report) access.model().validateReport(report.properties());
-                    if (enriched.body() instanceof DeviceMessageBody.PropertyReadReply reply) access.model().validateReport(reply.properties());
-                    if (enriched.body() instanceof DeviceMessageBody.PropertyWriteReply reply) access.model().validatePropertyWrite(reply.properties());
-                    if (enriched.body() instanceof DeviceMessageBody.EventReport event) access.model().validateEvent(event.eventId(), event.fields());
-                    chain = chain.thenComposeAsync(nothing -> current(session) ? handler.handle(enriched)
-                            : CompletableFuture.failedFuture(new IllegalStateException("会话已失效")), workers);
-                }
-                return chain;
+                var route = codec.childRoute(packet);
+                if (route.isEmpty()) return handlePacket(session,packet,access,receivedAt);
+                var child = new DeviceKey(session.key.tenantId(),route.get().deviceId());
+                return resolver.resolveChild(session.key,child).thenCompose(found -> {
+                    var target = found.orElseThrow(() -> new IllegalArgumentException("Gateway is not authorized for this child"));
+                    if (!child.equals(target.device().key()) || target.device().lifecycle()!=DeviceLifecycle.ACTIVE)
+                        throw new IllegalArgumentException("Invalid child access context");
+                    return switch (route.get().action()) {
+                        case ONLINE -> childOnline(session,child);
+                        case OFFLINE -> childOffline(session,child);
+                        case MESSAGE -> {
+                            var logical = sessions.get(child);
+                            if (logical==null || logical.parent!=session || !current(logical)) throw new IllegalArgumentException("Child must report online first");
+                            refreshOwnership(logical);
+                            yield handlePacket(logical,route.get().packet(),target,receivedAt);
+                        }
+                    };
+                });
             });
         }).orTimeout(options.processingTimeout().toMillis(), TimeUnit.MILLISECONDS));
         session.ingress.whenComplete((ok, error) -> session.context.runOnContext(ignored -> {
@@ -329,6 +356,63 @@ public final class VertxMqttGateway implements DeviceAccessGateway {
         }));
     }
 
+    private CompletionStage<Void> handlePacket(Session session,ProtocolPacket packet,DeviceAccessContext access,Instant receivedAt) {
+        var context = new DecodeContext(session.key,Transport.MQTT,access.device().modelVersion(),receivedAt,access.device().product().productId());
+        var decoded = List.copyOf(codec.decode(packet,context));
+        if (decoded.size()>64) throw new IllegalArgumentException("Too many messages");
+        CompletionStage<Void> chain=CompletableFuture.completedFuture(null);
+        for (var item:decoded) {
+            var enriched=context.bind(item);
+            if(enriched.body() instanceof DeviceMessageBody.PropertyReport report) access.model().validateReport(report.properties());
+            if(enriched.body() instanceof DeviceMessageBody.PropertyReadReply reply) access.model().validateReport(reply.properties());
+            if(enriched.body() instanceof DeviceMessageBody.PropertyWriteReply reply) access.model().validatePropertyWrite(reply.properties());
+            if(enriched.body() instanceof DeviceMessageBody.EventReport event) access.model().validateEvent(event.eventId(),event.fields());
+            chain=chain.thenComposeAsync(ignored -> current(session)?handler.handle(enriched):CompletableFuture.failedFuture(new IllegalStateException("Session expired")),workers);
+        }
+        return chain;
+    }
+
+    private CompletionStage<Void> childOnline(Session parent,DeviceKey key) {
+        var existing=sessions.get(key);
+        if(existing!=null && existing.parent==parent && current(existing)) return CompletableFuture.completedFuture(null);
+        long began=System.nanoTime();
+        var lease=ownership==null?null:ownership.acquire(key,"proxy:"+key.deviceId().value());
+        var result=new CompletableFuture<Void>();
+        parent.context.runOnContext(ignored -> {
+            synchronized(this) {
+                if(!current(parent) || key.equals(parent.key) || sessions.values().stream().filter(s->s.parent==parent).count()>=1024) {
+                    releaseOwnership(key,lease);result.completeExceptionally(new IllegalArgumentException("Parent expired or child capacity exceeded"));return;
+                }
+                var child=new Session(parent.endpoint,parent.context,key,parent.receiveMaximum,parent.maxPacketBytes);
+                child.parent=parent;child.lease=lease;
+                child.ownershipDeadline=lease==null?Long.MAX_VALUE:began+TimeUnit.MILLISECONDS.toNanos(lease.validForMillis());
+                child.nextRenewal=System.nanoTime()+TimeUnit.SECONDS.toNanos(1);
+                if(!leaseValid(child)){releaseOwnership(key,lease);result.completeExceptionally(new IllegalStateException("Child lease expired"));return;}
+                var previous=sessions.put(key,child);
+                if(previous!=null) previous.context.runOnContext(nothing->disconnect(previous,MqttDisconnectReasonCode.SESSION_TAKEN_OVER));
+                connectionChanged(key,true);result.complete(null);
+            }
+        });
+        return result;
+    }
+    private CompletionStage<Void> childOffline(Session parent,DeviceKey key) {
+        var result=new CompletableFuture<Void>();
+        parent.context.runOnContext(ignored -> {
+            var child=sessions.get(key);
+            if(child!=null && child.parent==parent) disconnect(child,MqttDisconnectReasonCode.NORMAL);
+            result.complete(null);
+        });
+        return result;
+    }
+    private CompletionStage<DeviceAccessContext> resolveSession(Session session) {
+        if(session.parent==null) return resolveActive(session.key);
+        return resolver.resolveChild(session.parent.key,session.key).thenApply(found -> {
+            var access=found.orElseThrow(()->new SecurityException("Child proxy authorization revoked"));
+            if(!session.key.equals(access.device().key()) || access.device().lifecycle()!=DeviceLifecycle.ACTIVE) throw new SecurityException("Child is disabled");
+            return access;
+        });
+    }
+
     @Override
     public CompletionStage<DeliveryReceipt> send(DeviceDownlink command) {return sendToSession(command,null,0);}
     /** Router must supply the expected session token; a new connection must not inherit an old dispatch. */
@@ -342,7 +426,7 @@ public final class VertxMqttGateway implements DeviceAccessGateway {
         var result = new CompletableFuture<DeliveryReceipt>();
         offload(() -> {
             refreshOwnership(session);
-            return resolveActive(command.device()).thenApply(access -> {
+            return resolveSession(session).thenApply(access -> {
             if (!command.modelVersion().equals(access.device().modelVersion())) throw new IllegalArgumentException("命令模型版本不匹配");
             switch (command.body()) {
                 case DownlinkBody.OperationInvoke invoke -> access.model().validateOperation(invoke.operationId(), invoke.inputs());
@@ -350,16 +434,19 @@ public final class VertxMqttGateway implements DeviceAccessGateway {
                 case DownlinkBody.PropertyWrite write -> access.model().validatePropertyWrite(write.properties());
                 default -> { }
             }
-            return codec.encode(command, Transport.MQTT);
+            return session.parent==null?codec.encode(command, Transport.MQTT):codec.encodeChild(command,Transport.MQTT);
         }); }).orTimeout(options.processingTimeout().toMillis(), TimeUnit.MILLISECONDS)
                 .whenComplete((packet, error) -> session.context.runOnContext(ignored -> {
                     if (error != null) { result.completeExceptionally(errorCause(error)); return; }
+                    if(!current(session)){result.completeExceptionally(new IllegalStateException("Target session expired"));return;}
                     publish(session, command, packet, result);
                 }));
         return result;
     }
 
-    private void publish(Session session, DeviceDownlink command, ProtocolPacket packet, CompletableFuture<DeliveryReceipt> result) {
+    private void publish(Session target, DeviceDownlink command, ProtocolPacket packet, CompletableFuture<DeliveryReceipt> result) {
+        var session=target.parent==null?target:target.parent;
+        if(!current(target)){result.completeExceptionally(new IllegalStateException("Target session expired"));return;}
         if (!current(session) || command.isExpiredAt(clock.instant())) { result.completeExceptionally(new IllegalStateException("会话失效或命令过期")); return; }
         if (packet == null || !validTopic(packet.attributes().get("topic"))) { result.completeExceptionally(new IllegalArgumentException("下行编码必须使用设备下行通道")); return; }
         // 预留协议字段开销，避免超过客户端声明的最大报文。
@@ -373,7 +460,7 @@ public final class VertxMqttGateway implements DeviceAccessGateway {
         if (remainingMillis < 1) { result.completeExceptionally(new IllegalStateException("命令已过期")); return; }
         var properties = new MqttProperties();
         add(properties, PUBLICATION_EXPIRY_INTERVAL, (int) Math.min(0xFFFFFFFFL, (remainingMillis + 999) / 1000));
-        var pending = new Pending(result, receipt);
+        var pending = new Pending(result, receipt, target);
         session.outgoing.put(packetId, pending);
         pending.timer = vertx.setTimer(Math.min(remainingMillis, options.acknowledgementTimeout().toMillis()), ignored -> {
             // 未确认的包标识不能直接复用；关闭连接后由命令域决定查询或重试。
@@ -424,9 +511,11 @@ public final class VertxMqttGateway implements DeviceAccessGateway {
     private boolean leaseValid(Session session) {
         return serviceGuard.getAsBoolean() && (session.lease == null || session.ownershipDeadline - System.nanoTime() > 0);
     }
-    private boolean current(Session session) { return running && !session.closed && sessions.get(session.key) == session && leaseValid(session); }
+    private boolean current(Session session) { return running && !session.closed && sessions.get(session.key) == session && leaseValid(session) && (session.parent==null || current(session.parent)); }
     private record OwnedAccess(DeviceAccessContext access, SessionOwnership.Lease lease, long deadline) {}
     private void refreshOwnership(Session session) {
+        // A child lease cannot authorize transmission through a parent whose connection was taken over.
+        if (session.parent != null) refreshOwnership(session.parent);
         if (session.lease == null) return;
         if (!current(session)) throw new SecurityException("Session ownership is no longer valid");
         long began = System.nanoTime();
@@ -445,7 +534,13 @@ public final class VertxMqttGateway implements DeviceAccessGateway {
         for (var session : sessions.values()) {
             if (!current(session)) { session.context.runOnContext(ignored -> disconnect(session, MqttDisconnectReasonCode.SESSION_TAKEN_OVER)); continue; }
             if (session.nextRenewal - System.nanoTime() > 0 || !session.renewing.compareAndSet(false, true)) continue;
-            offload(() -> { refreshOwnership(session); return CompletableFuture.completedFuture(null); })
+            offload(() -> {
+                if(session.parent==null){refreshOwnership(session);return CompletableFuture.completedFuture(null);}
+                return resolveSession(session).thenRun(()->{
+                    refreshOwnership(session);
+                    session.nextRenewal=System.nanoTime()+TimeUnit.SECONDS.toNanos(1);
+                });
+            })
                     .whenComplete((ok, error) -> {
                         session.renewing.set(false);
                         if (error != null && !(errorCause(error) instanceof RejectedExecutionException)) session.context.runOnContext(ignored -> disconnect(session, MqttDisconnectReasonCode.IMPLEMENTATION_SPECIFIC_ERROR));
@@ -460,6 +555,7 @@ public final class VertxMqttGateway implements DeviceAccessGateway {
     private void reject(Session session, MqttDisconnectReasonCode reason) { rejectedMessages.incrementAndGet(); disconnect(session, reason); }
     private void disconnect(Session session, MqttDisconnectReasonCode reason) {
         session.closeReason = reason.name();
+        if(session.parent!=null){closeSession(session,new IllegalStateException("Child session ended: "+reason));return;}
         closeSession(session, new IllegalStateException("连接结束：" + reason));
         try { if (session.endpoint.isConnected()) session.endpoint.disconnect(reason, MqttProperties.NO_PROPERTIES); }
         finally { connections.remove(session.endpoint); closeEndpoint(session.endpoint); }
@@ -467,6 +563,18 @@ public final class VertxMqttGateway implements DeviceAccessGateway {
     private synchronized void closeSession(Session session, Throwable reason) {
         if (session.closed) return;
         session.closed = true;
+        if(session.parent==null) {
+            List.copyOf(sessions.values()).stream().filter(child->child.parent==session).forEach(child->closeSession(child,reason));
+        } else {
+            var physical=session.parent;
+            // Run pending-map mutations on the physical connection's event loop.
+            physical.context.runOnContext(ignored->{
+                // Keep unacknowledged packet identifiers reserved until PUBACK or connection close.
+                for(var pending:physical.outgoing.values()) {
+                    if(pending.target==session) pending.result.completeExceptionally(reason);
+                }
+            });
+        }
         LOG.log(System.Logger.Level.INFO, "MQTT disconnected connectionId={0} clientId={1} tenantId={2} deviceId={3} reason={4} durationMs={5}",
                 session.connectionId, logValue(session.endpoint.clientIdentifier()), logValue(session.key.tenantId().value()),
                 logValue(session.key.deviceId().value()), session.closeReason, Long.toString(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - session.connectedAt)));
@@ -510,6 +618,7 @@ public final class VertxMqttGateway implements DeviceAccessGateway {
         final MqttEndpoint endpoint;
         final Context context;
         final DeviceKey key;
+        Session parent;
         final int receiveMaximum;
         final long maxPacketBytes;
         final Map<Integer, Pending> outgoing = new HashMap<>();
@@ -534,6 +643,7 @@ public final class VertxMqttGateway implements DeviceAccessGateway {
         final CompletableFuture<DeliveryReceipt> result;
         final DeliveryReceipt receipt;
         long timer;
-        Pending(CompletableFuture<DeliveryReceipt> result, DeliveryReceipt receipt) { this.result = result; this.receipt = receipt; }
+        final Session target;
+        Pending(CompletableFuture<DeliveryReceipt> result, DeliveryReceipt receipt,Session target) { this.result = result; this.receipt = receipt;this.target=target; }
     }
 }

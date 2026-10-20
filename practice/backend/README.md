@@ -1,6 +1,6 @@
 # Java 后端使用说明
 
-需要 JDK 21、Maven 3.6.3及以上。版本见 [父 POM](pom.xml)，整体规则见 [项目架构](../docs/architecture.md)。当前包含 core、Vert.x MQTT 5接入与默认协议、身份／租户与产品设备管理、Redis影子、历史存储、直播、Kafka消息和集群节点／会话基础，以及组合启动应用和三个独立服务。
+需要 JDK 21、Maven 3.6.3及以上。版本见 [父 POM](pom.xml)，整体规则见 [项目架构](../docs/architecture.md)。当前包含 core、Vert.x MQTT 5接入与默认协议、身份／租户与产品设备管理、Redis影子、历史存储、直播、Kafka／Dubbo 消息和集群节点／会话基础，以及组合启动应用和三个独立服务。
 
 ## 构建与启动
 
@@ -207,7 +207,7 @@ MQTT监听 `127.0.0.1:1883`，可用 `MQTT_PORT` 改端口。客户端必须选�
 
 两者密码均使用上面显式输入的环境变量。用户名与ClientId必须符合开发清单；配置入口为 `application-mqtt-dev.yml`。自定义开发设备通过 `nebula.mqtt.devices` 配置，设备、用户名和ClientId不能重复。
 
-官方默认协议已独立实现于 `protocol-component`。完整 Topic、信封、属性读写、指令、事件、设备信息、校时、配置、OTA、错误码和恢复规则统一维护在 [MQTT 设备协议 1.0](../docs/mqtt-protocol.md)。设备向 `nebula/v1/up` 发布，在全局回调接收 `nebula/v1/down`，不发送 SUBSCRIBE。
+官方默认协议已独立实现于 `protocol-component`。完整 Topic、信封、属性读写、指令、事件、设备信息、校时、配置、OTA、错误码和恢复规则统一维护在 [MQTT 设备协议 1.0](../docs/mqtt-protocol.md)。直连设备及网关自身向 `nebula/v1/up` 发布，在全局回调接收 `nebula/v1/down`；网关子设备使用同一协议中的子设备 Topic 和逻辑会话规则。两种接入都不发送 SUBSCRIBE。
 
 上报示例（QoS 1、Retain=false）：
 
@@ -297,7 +297,7 @@ java -jar platform-bootstrap/target/platform-bootstrap-0.1.0-SNAPSHOT.jar --spri
 java -jar platform-bootstrap/target/platform-bootstrap-0.1.0-SNAPSHOT.jar --spring.profiles.active=management,cluster --nebula.runtime.role=worker --server.port=8083
 ```
 
-这组命令用于成员／会话基础验证；跨角色上行消费还需配置 Kafka，具体配置见 [EventBus](EVENTBUS.md)，跨节点命令需按下节额外启用 cluster-commands。设备连接两个不同 MQTT 端口可验证接管；实际部署仍需接入层负载均衡分配新连接和重连。热加入不会迁移已有 TCP 连接。
+这组命令用于成员／会话基础验证；跨角色上行消费还需配置 Kafka 或 Dubbo，具体配置见 [EventBus](EVENTBUS.md)，跨节点命令需按下节额外启用 cluster-commands。设备连接两个不同 MQTT 端口可验证接管；实际部署仍需接入层负载均衡分配新连接和重连。热加入不会迁移已有 TCP 连接。
 
 接入节点使用本次进程 UUID 注册，生效的设备会话带 nodeId、sessionId、epoch 和租约。接管后旧回调不能释放新会话；跨节点 ClientId 碰撞不会劫持其他设备。节点／会话失去租约或共享存储不可用时停止服务旧所有权，失效身份需重启才能重新加入。正常停止记录 OFFLINE，强杀后按租约失效；数据库备份恢复前须隔离旧实例，恢复后重新启动接入节点，不能依赖回滚后的旧 epoch 保证安全。
 
@@ -305,7 +305,7 @@ java -jar platform-bootstrap/target/platform-bootstrap-0.1.0-SNAPSHOT.jar --spri
 
 ### 持久化命令与跨节点下行
 
-所有访问同一数据库的进程使用相同集群配置。在前述启动命令的 profile 中增加 `cluster-commands`，即 `--spring.profiles.active=management,cluster,cluster-commands`；配置 `KAFKA_BOOTSTRAP_SERVERS` 及已创建的事件／失败 topic，详见 [Kafka EventBus](EVENTBUS.md)。模式强制使用 Kafka，缺少共享目录或 broker 能力时启动失败。`EVENTBUS_NODE_ID` 为空时自动生成本次进程 UUID；显式配置时各实例必须唯一，避免广播消费组互相分担。
+所有访问同一数据库的进程使用相同集群配置。在前述启动命令的 profile 中增加 `cluster-commands`，即 `--spring.profiles.active=management,cluster,cluster-commands`；默认使用 Kafka，配置 `KAFKA_BOOTSTRAP_SERVERS` 及已创建的事件／失败 topic。使用 Dubbo 时须显式传入 `--nebula.eventbus.mode=dubbo`（覆盖该 profile 的 Kafka 默认值），并配置 Nacos 实例发现、共享 SQL 业务订阅目录、节点独立 RPC 端口与签名凭据，详见 [EventBus](EVENTBUS.md)。缺少共享会话目录或可靠 EventBus 能力时启动失败。`EVENTBUS_NODE_ID` 为空时自动生成本次进程 UUID；显式配置时各实例必须唯一，避免广播消费组互相分担。
 
 Flyway 加载 `db/cluster-device/V22__durable_commands.sql`（MySQL 为 `db/cluster-device-mysql`），新增命令、状态历史及 Outbox 表。已应用 V21／V22 的同库进程启动时须保留对应 profile／迁移位置，不能通过移除 profile 绕过已应用迁移校验。当前命令 JSON schema 为 v1，仅支持后台属性写入和操作调用；原 HTTP 路径及授权保留。
 
@@ -319,7 +319,7 @@ API 返回 QUEUED 表示命令和待发布工作已同时保存。Worker 通过 
 mvn -B -ntp -s .mvn/settings-central.xml -pl platform-bootstrap -am -Dtest=DurableCommandsTest,ClusterCommandProcessTest -Dsurefire.failIfNoSpecifiedTests=false test
 ```
 
-测试使用两个管理、两个接入、两个 Worker 独立 JVM、隔离 Kafka broker 与 H2 TCP 数据库，验证提交节点强杀、远端设备执行反馈、跨管理节点查询、重复发布不重复发送和未知结果不重发。两个管理节点分别登录，尚未通过共享登录或生产数据库兼容性验收。所有新集群表时间按 UTC 保存；MySQL 使用 DATETIME(3)，不会依赖进程时区解释节点租约。
+测试分别使用 Kafka 和 Dubbo 模式，启动两个管理、两个接入、两个 Worker 独立 JVM及隔离 H2 TCP 数据库（Kafka 模式另启隔离 broker），验证提交节点强杀、远端设备执行反馈、跨管理节点查询、重复发布不重复发送和未知结果不重发。两个管理节点分别登录，尚未通过共享登录或生产数据库兼容性验收。所有新集群表时间按 UTC 保存；MySQL 使用 DATETIME(3)，不会依赖进程时区解释节点租约。
 
 ### 节点观察与维护 API
 
@@ -343,9 +343,9 @@ mvn -B -ntp -s .mvn/settings-central.xml -pl platform-bootstrap -am -Dtest=Runti
 ```
 
 多进程测试覆盖两个 access、一个 management 和一个 worker，及强杀后新实例重连；仍不替代第一版要求的两个 management、两个 access、两个 worker 完整业务闭环验收。PostgreSQL／MySQL 并发与故障兼容性仍需专项验证。
-## Kafka EventBus
+## EventBus
 
-已支持本地／Kafka 模式切换、具名共享消费组和节点广播。启动配置、主题规模、交付语义和测试见 [EventBus 专项说明](EVENTBUS.md)。集群消息传输已实现，完整设备集群链路仍按架构规划推进。
+已支持 Local／Kafka／Dubbo 模式、具名共享订阅和节点广播；Dubbo 额外支持发布侧资源路由、来源过滤与持久投递。平台超管可在 `/platform/eventbus` 观察 Dubbo 目录、订阅和积压，Kafka／Local 明确显示未提供集群观测。启动配置、主题规模、交付语义和测试见 [EventBus 专项说明](EVENTBUS.md)。集群消息传输已实现，完整设备集群链路仍按架构规划推进。
 
 ## 三个独立服务
 

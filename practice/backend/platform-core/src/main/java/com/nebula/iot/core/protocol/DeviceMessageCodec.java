@@ -6,6 +6,14 @@ import java.util.List;
 
 /** CPU-local mapping contract. Blocking I/O must run outside codec calls. */
 public interface DeviceMessageCodec {
+    /** Optional proxy addressing. The network layer authorizes the parent/child relation. */
+    record ChildRoute(com.nebula.iot.core.identity.DeviceId deviceId, Action action, ProtocolPacket packet) {
+        public enum Action { ONLINE, OFFLINE, MESSAGE }
+    }
+    default java.util.Optional<ChildRoute> childRoute(ProtocolPacket packet) { return java.util.Optional.empty(); }
+    default ProtocolPacket encodeChild(DeviceDownlink message, Transport transport) {
+        throw new UnsupportedOperationException("Protocol does not support gateway children");
+    }
     /** Return a non-null list, empty for packets with no business messages. */
     List<DecodedMessage> decode(ProtocolPacket packet, DecodeContext context);
 

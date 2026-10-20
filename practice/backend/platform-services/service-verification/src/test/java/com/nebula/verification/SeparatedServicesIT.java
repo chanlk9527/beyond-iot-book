@@ -63,8 +63,19 @@ class SeparatedServicesIT {
                 }
             }).get(10,TimeUnit.SECONDS);
             assertTrue(Objects.requireNonNull(messages.poll(10,TimeUnit.SECONDS)).contains("ready"));
-            device = new MqttClient("tcp://127.0.0.1:"+access.mqtt(),"d1",new MemoryPersistence());
+            device = new MqttClient("ws://127.0.0.1:"+access.mqtt()+"/mqtt","d1",new MemoryPersistence());
             device.setTimeToWait(10000);
+            var downlinks = new LinkedBlockingQueue<String>();
+            device.setCallback(new org.eclipse.paho.mqttv5.client.MqttCallback() {
+                public void disconnected(org.eclipse.paho.mqttv5.client.MqttDisconnectResponse response) { }
+                public void mqttErrorOccurred(org.eclipse.paho.mqttv5.common.MqttException error) { }
+                public void messageArrived(String topic,org.eclipse.paho.mqttv5.common.MqttMessage message) {
+                    downlinks.add(new String(message.getPayload(),StandardCharsets.UTF_8));
+                }
+                public void deliveryComplete(org.eclipse.paho.mqttv5.client.IMqttToken token) { }
+                public void connectComplete(boolean reconnect,String uri) { }
+                public void authPacketArrived(int reason,org.eclipse.paho.mqttv5.common.packet.MqttProperties properties) { }
+            });
             var options = new MqttConnectionOptions(); options.setConnectionTimeout(5); options.setCleanStart(true);
             options.setUserName("d1"); options.setPassword("device-password".getBytes(StandardCharsets.UTF_8)); device.connect(options);
             report(device,"m1",true);
@@ -80,6 +91,27 @@ class SeparatedServicesIT {
             var state = shadow(management.http());
             assertTrue(state.path("reported").path("power").path("value").asBoolean(),state.toString());
             assertEquals("worker",jdbc.queryForObject("SELECT writer FROM fixture_shadow WHERE device='d1'",String.class));
+            // The default service profile must route commands to access, not a nonexistent management MQTT gateway.
+            var command=post(management.http(),"/api/management/catalog/tenants/ta/devices/d1/downlinks/properties",
+                    "application/json","{\"properties\":{\"power\":false}}");
+            assertEquals(200,command.statusCode(),command.body());
+            var commandId=json.readTree(command.body()).path("messageId").asText();
+            var downlink=json.readTree(Objects.requireNonNull(downlinks.poll(20,TimeUnit.SECONDS),"No WebSocket downlink"));
+            assertEquals("thing.property.write",downlink.path("method").asText());
+            assertEquals(commandId,downlink.path("messageId").asText());
+            var reply=json.createObjectNode();reply.put("version","1.0");reply.put("messageId","write-reply");
+            reply.put("method","thing.property.write.reply");reply.put("timestamp",Instant.now().toEpochMilli());
+            reply.put("replyTo",commandId);reply.putObject("result").put("code","SUCCESS");
+            reply.putObject("data").putObject("properties").put("power",false);
+            device.publish("nebula/v1/up",json.writeValueAsBytes(reply),1,false);
+            long replyDeadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(10);
+            String commandState="";
+            do {
+                commandState=json.readTree(get(management.http(),"/api/management/catalog/tenants/ta/devices/d1/downlinks/"+commandId).body()).path("status").asText();
+                if("SUCCEEDED".equals(commandState))break;
+                Thread.sleep(100);
+            }while(System.nanoTime()<replyDeadline);
+            assertEquals("SUCCEEDED",commandState);
             stop(worker.process());
             messages.clear();
             report(device,"m2",false);
@@ -117,7 +149,7 @@ class SeparatedServicesIT {
                 "--nebula.management.initial-account.username=service-admin","--nebula.management.initial-account.password=test-password",
                 "--nebula.management.initial-account.platform-admin=true",
                 "--spring.main.sources="+ShadowFixtureInitializer.StoreConfiguration.class.getName(),"--logging.level.root=WARN"));
-        if(mqtt>0)command.add("--nebula.mqtt.port="+mqtt);
+        if(mqtt>0){command.add("--nebula.mqtt.port=0");command.add("--nebula.mqtt.websocket-port="+mqtt);}
         Path log=root.resolve("platform-services/service-verification/target/"+role+"-"+UUID.randomUUID()+".log");
         var builder=new ProcessBuilder(command).redirectErrorStream(true).redirectOutput(log.toFile());
         // Isolate the test from the caller's development credentials and role overrides.

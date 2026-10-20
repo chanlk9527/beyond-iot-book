@@ -11,6 +11,8 @@ import java.util.function.BooleanSupplier;
 import org.h2.jdbcx.JdbcDataSource;
 import org.h2.tools.Server;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.eclipse.paho.mqttv5.client.*;
 import org.eclipse.paho.mqttv5.common.*;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -20,7 +22,8 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Six real JVMs: two API, two access, two worker. Kafka and SQL are isolated test infrastructure. */
 class ClusterCommandProcessTest {
     final ObjectMapper json=new ObjectMapper();
-    @Test void commandSurvivesApiCrashRoutesToRemoteDeviceAndDoesNotRepeatAnUncertainSend() throws Exception {
+    @ParameterizedTest @ValueSource(strings={"kafka","dubbo"})
+    void commandSurvivesApiCrashRoutesToRemoteDeviceAndDoesNotRepeatAnUncertainSend(String mode) throws Exception {
         var fixture=new AccessClusterProcessTest();
         var broker=new EmbeddedKafkaKraftBroker(1,3,"commands-test","commands-failed");
         var db=new JdbcDataSource();String name="commands_"+UUID.randomUUID().toString().replace("-","");
@@ -28,7 +31,8 @@ class ClusterCommandProcessTest {
         try(var held=db.getConnection()) {
             var server=Server.createTcpServer("-tcpPort","0","-ifNotExists").start();
             try {
-                broker.afterPropertiesSet();fixture.kafka=broker.getBrokersAsString();
+                if(mode.equals("kafka")){broker.afterPropertiesSet();fixture.kafka=broker.getBrokersAsString();}
+                else fixture.kafka="dubbo";
                 String url="jdbc:h2:tcp://127.0.0.1:"+server.getPort()+"/mem:"+name+";MODE=PostgreSQL;DB_CLOSE_DELAY=-1";
                 var apiA=fixture.start(url,"api-a","management");var apiB=fixture.start(url,"api-b","management");
                 var accessA=fixture.start(url,"access-a","access");var accessB=fixture.start(url,"access-b","access");
@@ -69,7 +73,7 @@ class ClusterCommandProcessTest {
             } finally {
                 for(var client:fixture.clients)try{if(client.isConnected())client.disconnectForcibly(0,0,false);client.close(true);}catch(Exception ignored){}
                 for(var child:fixture.processes){child.process().destroy();if(!child.process().waitFor(8,TimeUnit.SECONDS)){child.process().destroyForcibly();child.process().waitFor(8,TimeUnit.SECONDS);}}
-                broker.destroy();server.stop();
+                if(mode.equals("kafka"))broker.destroy();server.stop();
             }
         }
     }

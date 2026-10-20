@@ -78,3 +78,9 @@ it('hides publish actions from accounts lacking publication permission',async()=
  context.can.mockImplementation(permission=>permission!=='product:publish')
  const root=mount();await settle();expect(publishButton(root)).toBeUndefined()
 })
+it('uses the shared detail shell for the header and content body',async()=>{
+ const root=mount();await settle()
+ expect(root.querySelector('.detail-shell')).toBeTruthy()
+ expect(root.querySelector('.detail-header')).toBeTruthy()
+ expect(root.querySelector('.detail-body')).toBeTruthy()
+})

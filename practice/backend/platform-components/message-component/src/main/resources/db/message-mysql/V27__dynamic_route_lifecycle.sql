@@ -1,0 +1,10 @@
+ALTER TABLE event_route_node ADD node_state VARCHAR(20) NOT NULL DEFAULT 'STARTING';
+ALTER TABLE event_route_node ADD drain_until DATETIME(3) NULL;
+ALTER TABLE event_route_node ADD node_generation BIGINT NOT NULL DEFAULT 1;
+ALTER TABLE event_route_subscription ADD logical_key VARCHAR(222);
+ALTER TABLE event_route_subscription ADD subscription_generation BIGINT NOT NULL DEFAULT 1;
+UPDATE event_route_subscription SET logical_key=CONCAT(subscription_name,':',subscription_mode,':',target_node) WHERE logical_key IS NULL;
+ALTER TABLE event_route_subscription MODIFY logical_key VARCHAR(222) NOT NULL;
+ALTER TABLE event_route_delivery ADD owner_token VARCHAR(64);
+CREATE INDEX event_route_node_ready ON event_route_node(namespace_id,node_state,lease_until,applied_revision);
+CREATE INDEX event_route_subscription_generation ON event_route_subscription(namespace_id,logical_key,subscription_generation);

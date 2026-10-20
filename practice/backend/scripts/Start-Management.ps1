@@ -16,7 +16,10 @@ $allowedKeys = @(
     'REDIS_ENABLED', 'REDIS_URL', 'REDIS_COMMAND_TIMEOUT_MS',
     'HISTORY_PROVIDER', 'HISTORY_MAXIMUM_RETENTION_DAYS', 'HISTORY_CLEANUP_INTERVAL_MS',
     'TDENGINE_URL', 'TDENGINE_USERNAME', 'TDENGINE_PASSWORD', 'TDENGINE_DATABASE',
-    'MQTT_ENABLED', 'MQTT_PORT',
+    'MQTT_ENABLED', 'MQTT_PORT', 'MQTT_WEBSOCKET_ENABLED', 'MQTT_WEBSOCKET_PORT',
+    'EVENTBUS_MODE', 'EVENTBUS_NODE_ID', 'EVENTBUS_NAMESPACE', 'EVENTBUS_TOPIC', 'EVENTBUS_FAILURE_TOPIC',
+    'KAFKA_BOOTSTRAP_SERVERS', 'EVENTBUS_DUBBO_HOST', 'EVENTBUS_DUBBO_PORT', 'EVENTBUS_DUBBO_CREDENTIAL', 'EVENTBUS_DUBBO_DISCOVERY',
+    'NACOS_SERVER_ADDR', 'NACOS_NAMESPACE', 'NACOS_GROUP', 'NACOS_EVENTBUS_SERVICE', 'NACOS_USERNAME', 'NACOS_PASSWORD',
     'NEBULA_MANAGEMENT_INITIAL_ACCOUNT_USERNAME', 'NEBULA_MANAGEMENT_INITIAL_ACCOUNT_PASSWORD',
     'NEBULA_MANAGEMENT_INITIAL_ACCOUNT_PLATFORM_ADMIN'
 )
@@ -28,7 +31,7 @@ foreach ($line in ($content -split '\r?\n')) {
     $separator = $line.IndexOf('=')
     if ($separator -lt 1) { throw 'Invalid local configuration: expected KEY=value. Values are not printed.' }
     $key = $line.Substring(0, $separator).Trim()
-    if ($key -cnotin $allowedKeys) { throw 'Unsupported configuration key. Only database, Redis, history, MQTT and initial management account settings are allowed.' }
+    if ($key -cnotin $allowedKeys) { throw 'Unsupported configuration key. Only documented database, Redis, history, MQTT, EventBus, Nacos and initial account settings are allowed.' }
     if ($settings.ContainsKey($key)) { throw 'Duplicate local configuration key. Values are not printed.' }
     $value = $line.Substring($separator + 1)
     if ([string]::IsNullOrWhiteSpace($value) -or $value.Contains('__FILL_')) {
@@ -71,6 +74,11 @@ if ($settings.ContainsKey('MQTT_ENABLED') -and $settings['MQTT_ENABLED'] -cnotin
 if ($settings.ContainsKey('MQTT_PORT')) {
     $mqttPort = 0
     if (![int]::TryParse($settings['MQTT_PORT'], [ref]$mqttPort) -or $mqttPort -lt 1 -or $mqttPort -gt 65535) { throw 'MQTT_PORT must be between 1 and 65535.' }
+}
+if ($settings.ContainsKey('MQTT_WEBSOCKET_ENABLED') -and $settings['MQTT_WEBSOCKET_ENABLED'] -cnotin @('true','false')) { throw 'MQTT_WEBSOCKET_ENABLED must be true or false.' }
+if ($settings.ContainsKey('MQTT_WEBSOCKET_PORT')) {
+    $websocketPort = 0
+    if (![int]::TryParse($settings['MQTT_WEBSOCKET_PORT'], [ref]$websocketPort) -or $websocketPort -lt 1 -or $websocketPort -gt 65535) { throw 'MQTT_WEBSOCKET_PORT must be between 1 and 65535.' }
 }
 if ($ValidateOnly) {
     Write-Output 'Local configuration is valid. No database connection was attempted.'

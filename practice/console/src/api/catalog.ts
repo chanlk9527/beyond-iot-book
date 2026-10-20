@@ -9,7 +9,8 @@ export interface DeviceDetail { device:Device; product:Product; model:ModelVersi
 export interface PropertySnapshot { id:string; type:string; access:string; value:string; updatedAt:string; available:boolean }
 export interface EventSnapshot { id:string; status:string; receivedAt:string; payload:string }
 export interface DeviceRuntimeSnapshot { properties:PropertySnapshot[]; events:EventSnapshot[] }
-export type ShadowScalar = string | number | boolean
+export type ScalarValue = string | number | boolean
+export type ShadowScalar = ScalarValue | ScalarValue[]
 export interface DownlinkStatus { messageId:string; commandId:string|null; kind:string; status:string; code:string|null; message:string|null; createdAt:string; expiresAt:string }
 export interface DesiredDispatch { shadow:DeviceShadow; downlink:DownlinkStatus|null; dispatchError:string|null }
 export interface DeviceShadow { version:number; modelVersion:string; reported:Record<string,{value:ShadowScalar;observedAt:string;receivedAt:string;messageId:string}>; desired:Record<string,{value:ShadowScalar;updatedAt:string}>; delta:Record<string,ShadowScalar>; updatedAt:string|null }
@@ -21,7 +22,11 @@ export function catalogScope(platform:boolean,tenantId:unknown):string {
   throw new Error('请明确选择平台级或租户范围。')
 }
 export function resourceScope(scope:string,resource:{tenantId:string|null}):string { return scope==='/catalog/platform' && resource.tenantId ? '/catalog/tenants/'+encodeURIComponent(resource.tenantId) : scope }
+export interface GatewayTopology { gateway:Device|null; children:Page<Device> }
 export const catalogApi = {
+ topology:(scope:string,id:string,page:number,signal:AbortSignal)=>request<GatewayTopology>(`${scope}/devices/${encodeURIComponent(id)}/topology?${new URLSearchParams({page:String(page),size:'20'})}`,{signal}),
+ bindGateway:(scope:string,d:Device,gatewayId:string,signal:AbortSignal)=>managementMutation<GatewayTopology>(`${resourceScope(scope,d)}/devices/${encodeURIComponent(d.id)}/gateway`,'PUT',{gatewayId,revision:d.revision},signal),
+ unbindGateway:(scope:string,d:Device,gatewayId:string,signal:AbortSignal)=>managementMutation<GatewayTopology>(`${resourceScope(scope,d)}/devices/${encodeURIComponent(d.id)}/gateway?${new URLSearchParams({gatewayId,revision:String(d.revision)})}`,'DELETE',undefined,signal),
  saveAndDispatch:(scope:string,id:string,version:number,desired:Record<string,ShadowScalar|null>,signal:AbortSignal)=>managementMutation<DesiredDispatch>(`${scope}/devices/${encodeURIComponent(id)}/shadow/desired-and-dispatch`,'PUT',{version,desired},signal),
  invoke:(scope:string,id:string,operationId:string,inputs:Record<string,ShadowScalar>,signal:AbortSignal)=>managementMutation<DownlinkStatus>(`${scope}/devices/${encodeURIComponent(id)}/downlinks/operations`,'POST',{operationId,inputs},signal),
  writeProperties:(scope:string,id:string,properties:Record<string,ShadowScalar>,signal:AbortSignal)=>managementMutation<DownlinkStatus>(`${scope}/devices/${encodeURIComponent(id)}/downlinks/properties`,'POST',{properties},signal),
@@ -46,6 +51,6 @@ export const catalogApi = {
  rotate:(scope:string,d:Device,signal:AbortSignal)=>managementMutation<Credential>(`${resourceScope(scope,d)}/devices/${encodeURIComponent(d.id)}/credential`,'POST',{revision:d.revision},signal),
 }
 export const warmerModel:ModelSpec={
- properties:{power:{id:'power',schema:{type:'BOOLEAN',minimum:null,maximum:null,maxLength:null},access:'READ_WRITE'},targetTemperature:{id:'targetTemperature',schema:{type:'DECIMAL',minimum:35,maximum:55,maxLength:null},access:'READ_WRITE'},currentTemperature:{id:'currentTemperature',schema:{type:'DECIMAL',minimum:0,maximum:100,maxLength:null},access:'READ_ONLY'}},
- events:{},operations:{setTemperature:{id:'setTemperature',inputs:{temperature:{id:'temperature',schema:{type:'DECIMAL',minimum:35,maximum:55,maxLength:null},required:true}}}},
+ properties:{power:{id:'power',name:'电源开关',description:'控制设备电源',schema:{type:'BOOLEAN',minimum:null,maximum:null,maxLength:null},access:'READ_WRITE'},targetTemperature:{id:'targetTemperature',name:'目标温度',description:'设定保温温度',schema:{type:'DECIMAL',unit:'℃',minimum:35,maximum:55,maxLength:null},access:'READ_WRITE'},currentTemperature:{id:'currentTemperature',name:'当前温度',description:'传感器测量温度',schema:{type:'DECIMAL',unit:'℃',minimum:0,maximum:100,maxLength:null},access:'READ_ONLY'}},
+ events:{},operations:{setTemperature:{id:'setTemperature',name:'设置温度',description:'调整设备目标温度',inputs:{temperature:{id:'temperature',name:'目标温度',description:'需要设置的温度',schema:{type:'DECIMAL',unit:'℃',minimum:35,maximum:55,maxLength:null},required:true}}}},
 }

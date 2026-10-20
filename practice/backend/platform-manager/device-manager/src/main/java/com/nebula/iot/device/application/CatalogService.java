@@ -71,9 +71,9 @@ public class CatalogService {
   catch(org.springframework.dao.DuplicateKeyException duplicate){conflict("Product code already exists in this scope");}
   audit(actor,scope,"PRODUCT_CREATED",id);return productView(productRow(scope,id));
  }
- @Transactional public Product saveDraft(String actor,String tenant,String id,String name,String description,ModelSpec model,Long revision,ProductConfiguration configuration){
+ @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED) public Product saveDraft(String actor,String tenant,String id,String name,String description,ModelSpec model,Long revision,ProductConfiguration configuration){
   String scope=access(actor,tenant,"product:write",true);validName(name);validDescription(description);validRevision(revision);
-  var current=productRow(scope,id);String encoded=encode(model);String settings=encodeConfiguration(configuration==null?decodeConfiguration(current.configuration()):configuration);
+  var current=lock(scope,id);if(configuration!=null&&!configuration.deviceType().equals(decodeConfiguration(current.configuration()).deviceType())&&data.deviceCount(scope,"",id)>0)conflict("Device type cannot change after registering devices");String encoded=encode(model);String settings=encodeConfiguration(configuration==null?decodeConfiguration(current.configuration()):configuration);
   if(data.updateProduct(scope,id,name.strip(),description,encoded,settings,revision)!=1)conflict("Product changed; refresh and retry");
   audit(actor,scope,"PRODUCT_DRAFT_SAVED",id);return productView(productRow(scope,id));
  }
@@ -170,9 +170,10 @@ public class CatalogService {
   if(!lifecycle.equals("ACTIVE"))revoke(scope,id);
   invalidateConnection(id);audit(actor,scope,"DEVICE_UPDATED",id);return deviceView(deviceRow(scope,id));
  }
- @Transactional public void deleteDevice(String actor,String tenant,String id,Long revision){
+ @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED) public void deleteDevice(String actor,String tenant,String id,Long revision){
   String scope=access(actor,tenant,"device:write",true);validRevision(revision);var row=deviceRow(scope,id);
   lock(scope,row.productId());
+  if(data.childCount(scope,id)>0||data.parentGateway(scope,id)!=null)conflict("Unbind gateway topology before deleting a device");
   if(data.productionItems(id)>0)conflict("Production devices must be retained for traceability");
   if(!row.lifecycle().equals("DISABLED")) conflict("Only disabled devices can be deleted");
   if(data.deleteDevice(scope,id,revision)!=1) conflict("Device changed; refresh and retry");
@@ -185,6 +186,39 @@ public class CatalogService {
   if(data.rotate(scope,id,encoder.encode(secret),secret,revision)!=1)conflict("Device changed; refresh and retry");
   revoke(scope,id);
   invalidateConnection(id);audit(actor,scope,"DEVICE_CREDENTIAL_ROTATED",id);return credential(deviceRow(scope,id),secret);
+ }
+ public record GatewayTopology(Device gateway,Page<Device> children) {}
+ public GatewayTopology topology(String actor,String tenant,String id,int page,int size) {
+  String scope=readScope(actor,tenant,"device:read");paging("",page,size);var row=deviceRow(scope,id);scope=row.scopeKey();
+  String parent=data.parentGateway(scope,id);
+  return new GatewayTopology(parent==null?null:deviceView(deviceRow(scope,parent)),
+    new Page<>(data.children(scope,id,size,((long)page-1)*size).stream().map(this::deviceView).toList(),data.childCount(scope,id),page,size));
+ }
+ @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED) public GatewayTopology bindGateway(String actor,String tenant,String childId,String gatewayId,Long revision) {
+  String scope=access(actor,tenant,"device:write",true);validRevision(revision);
+  if(gatewayId==null||gatewayId.equals(childId))bad("A different gateway is required");
+  var child=deviceRow(scope,childId);var gateway=deviceRow(scope,gatewayId);
+  // The same product locks guard registration, lifecycle changes, type changes and deletion.
+  java.util.stream.Stream.of(child.productId(),gateway.productId()).distinct().sorted().forEach(p->lock(scope,p));
+  child=deviceRow(scope,childId);gateway=deviceRow(scope,gatewayId);
+  var cp=productRow(scope,child.productId());var gp=productRow(scope,gateway.productId());
+  if(!"CHILD".equals(decodeConfiguration(cp.configuration()).deviceType())||!"GATEWAY".equals(decodeConfiguration(gp.configuration()).deviceType()))bad("Bind a CHILD device to a GATEWAY device");
+  if(!cp.enabled()||!gp.enabled()||!"ACTIVE".equals(child.lifecycle())||!"ACTIVE".equals(gateway.lifecycle()))conflict("Devices and products must be enabled");
+  if(data.parentGateway(scope,childId)!=null)conflict("Unbind the current gateway first");
+  if(data.childCount(scope,gatewayId)>=1024)conflict("Gateway supports at most 1024 children");
+  if(data.updateDevice(scope,childId,child.name(),child.lifecycle(),revision)!=1)conflict("Device changed; refresh and retry");
+  data.bindChild(scope,gatewayId,childId);revoke(scope,childId);invalidateConnection(childId);audit(actor,scope,"GATEWAY_CHILD_BOUND",childId);
+  return topology(actor,tenant,childId,1,20);
+ }
+ @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED) public GatewayTopology unbindGateway(String actor,String tenant,String childId,String gatewayId,Long revision) {
+  String scope=access(actor,tenant,"device:write",true);validRevision(revision);
+  var child=deviceRow(scope,childId);var gateway=deviceRow(scope,gatewayId);
+  java.util.stream.Stream.of(child.productId(),gateway.productId()).distinct().sorted().forEach(p->lock(scope,p));
+  child=deviceRow(scope,childId);
+  if(data.updateDevice(scope,childId,child.name(),child.lifecycle(),revision)!=1)conflict("Device changed; refresh and retry");
+  if(data.unbindChild(scope,gatewayId,childId)!=1)conflict("Gateway binding changed; refresh and retry");
+  revoke(scope,childId);invalidateConnection(childId);audit(actor,scope,"GATEWAY_CHILD_UNBOUND",childId);
+  return topology(actor,tenant,childId,1,20);
  }
  private void revoke(String scope,String id){events.publishEvent(new com.nebula.iot.device.api.DeviceConnectionDirectory.Revoked(new com.nebula.iot.core.device.DeviceKey(new com.nebula.iot.core.identity.TenantId(scope),new com.nebula.iot.core.identity.DeviceId(id))));}
  private void invalidateConnection(String id){events.publishEvent(new com.nebula.iot.device.api.DeviceConnectionDirectory.CacheInvalidated(id,false));}

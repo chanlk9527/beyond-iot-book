@@ -95,6 +95,8 @@ public class MqttGatewayConfiguration {
         var receiver = protocol instanceof OfficialMqttProtocol
                 ? new OfficialSystemMessageHandler(message -> gateways.getObject().send(message), handler, java.time.Clock.systemUTC()) : handler;
         var gateway = new VertxMqttGateway(mqttVertx, options, authenticator, resolver, protocol.codec(Transport.MQTT), receiver);
+        if (properties.websocketEnabled()) gateway.enableWebSocket(properties.websocketPort() == -1
+                ? (properties.port() == 0 ? 0 : 8084) : properties.websocketPort());
         presence.ifAvailable(service -> gateway.setConnectionObserver(service::changed));
         return gateway;
     }

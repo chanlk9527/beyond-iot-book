@@ -5,6 +5,11 @@ import { fileURLToPath } from 'node:url'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const proxy = {
+    '/mqtt': {
+      target: env.MQTT_WS_PROXY_TARGET || 'http://127.0.0.1:8084',
+      ws: true,
+      changeOrigin: false,
+    },
     '/api/management': {
       target: env.API_PROXY_TARGET || 'http://127.0.0.1:8080',
       changeOrigin: false,

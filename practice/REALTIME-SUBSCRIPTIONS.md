@@ -115,7 +115,7 @@ Spring 的同源和并发发送约束参考：[Spring WebSocket API](https://doc
 - 只在已提交状态上产生 shadow 通知，避免与原始 property/report 的异步投影发生竞态。
 - 同一设备重连接管时，旧会话关闭不会发布虚假的离线；网关停止会清理在线投影。
 - 通知可以合并、重复、乱序；eventId 可用于诊断，不是可恢复消费游标。客户端读取最新状态，以 shadow.version 防止旧读取覆盖新状态。
-- EventBus已支持Local／Kafka：Local无持久化；Kafka通过各management节点的独立广播消费组转发本地授权连接。cluster模式的在线快照读取共享会话目录。票据、登录Session和WebSocket连接仍在本机，management重启后需重新登录／建连；对外通知没有持久化回放、离线补投或恰好一次保证。
+- EventBus 已支持 Local／Kafka／Dubbo：Local 无持久化；Kafka 通过各 management 节点的独立广播消费组转发本地授权连接；Dubbo 使用节点广播订阅，仍在网关内过滤本地授权连接，不等于已实现客户端设备范围的定向订阅。cluster模式的在线快照读取共享会话目录。票据、登录Session和WebSocket连接仍在本机，management重启后需重新登录／建连；对外通知没有持久化回放、离线补投或恰好一次保证。
 - 状态提交与事件发布尚未使用 outbox，进程在两者之间崩溃可能丢通知。该情况依赖连接恢复后的快照收敛；对必须完整消费的事件不能使用此保证。
 - 三服务已验证access经Kafka上行、worker更新影子、management转发授权通知；该验收使用H2及测试影子适配，不能替代真实Redis／生产数据库验收。多management实例仍需固定客户端归属，随机负载均衡前须补齐共享登录与票据；完整集群实时状态验收尚未完成。
 

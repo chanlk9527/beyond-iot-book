@@ -50,7 +50,11 @@ public record ShadowDocument(long version, String modelVersion, Map<String, Repo
         return new DeviceShadow(version, modelVersion, reported, desired, Map.copyOf(delta), updatedAt);
     }
     private static boolean equalValue(JsonNode a, JsonNode b) {
+        if (a.isArray() && b.isArray()) {
+            if (a.size() != b.size()) return false;
+            for (int i = 0; i < a.size(); i++) if (!equalValue(a.get(i), b.get(i))) return false;
+            return true;
+        }
         return a.isNumber() && b.isNumber() ? a.decimalValue().compareTo(b.decimalValue()) == 0 : a.equals(b);
     }
 }
-

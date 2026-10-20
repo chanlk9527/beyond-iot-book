@@ -85,11 +85,12 @@ onScopeDispose(()=>{loadGeneration++;life.abort();window.removeEventListener('be
 void load()
 </script>
 <template>
+<div class="detail-shell">
 <CatalogNavigation/>
-<div class="page-heading"><div><p class="eyebrow">PRODUCT DETAIL</p><h1>{{saved?.name||'产品详情'}}</h1><p v-if="saved">{{saved.code}} · 最新模型版本 {{saved.latestVersion||'未发布'}} <el-tag :type="saved.enabled?'success':'info'">{{saved.enabled?'启用':'停用'}}</el-tag></p></div><div><el-button v-if="saved&&writable&&session.can('product:publish')" :disabled="busy" @click="status">{{saved.enabled?'停用产品':'启用产品'}}</el-button><el-button v-if="saved&&editable" type="danger" :disabled="busy||saved.enabled" :title="saved.enabled?'请先停用产品':'仅无设备的产品可删除'" @click="remove">删除产品</el-button><el-button @click="router.push(`${scope}/products`)">返回列表</el-button></div></div>
+<div class="page-heading detail-header"><div><p class="eyebrow">PRODUCT DETAIL</p><h1>{{saved?.name||'产品详情'}}</h1><p v-if="saved">{{saved.code}} · 最新模型版本 {{saved.latestVersion||'未发布'}} <el-tag :type="saved.enabled?'success':'info'">{{saved.enabled?'启用':'停用'}}</el-tag></p></div><div><el-button v-if="saved&&writable&&session.can('product:publish')" :disabled="busy" @click="status">{{saved.enabled?'停用产品':'启用产品'}}</el-button><el-button v-if="saved&&editable" type="danger" :disabled="busy||saved.enabled" :title="saved.enabled?'请先停用产品':'仅无设备的产品可删除'" @click="remove">删除产品</el-button><el-button @click="router.push(`${scope}/products`)">返回列表</el-button></div></div>
 <section v-if="loading" class="panel tenant-context-loading"><el-skeleton :rows="6" animated/></section>
 <section v-else-if="error" class="panel"><StatePanel title="产品加载失败" :description="error"><el-button @click="load">重试</el-button></StatePanel></section>
-<section v-else-if="product&&saved" class="panel product-detail-tabs">
+<section v-else-if="product&&saved" class="panel product-detail-tabs detail-body">
 <el-alert v-if="actionError" :title="actionError" type="error" :closable="false"/>
 <el-tabs v-model="active">
 <el-tab-pane v-for="tab in tabs" :key="tab.id" :name="tab.id"><template #label>{{tab.name}}<span v-if="tab.id==='data'?dataPolicyDirty:changes[tab.id as ProductEditTab]" class="unsaved-dot" aria-label="有未保存修改"> ●</span></template></el-tab-pane>
@@ -121,8 +122,9 @@ void load()
 </div>
 </section>
 <el-dialog v-model="showModel" :title="'已发布物模型 '+publishedVersion+'（只读）'" width="min(760px,94vw)"><pre class="published-model">{{publishedText}}</pre></el-dialog>
+</div>
 </template>
 <style scoped>
-.model-policy-context,.model-policy-save{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px;border:1px solid #dce9e3;border-radius:8px;background:#f3f8f5;margin:20px 0}.model-policy-context strong,.model-policy-save strong{font-size:13px;color:#426c5b}.model-policy-context p,.model-policy-save p{font-size:12px;color:#81968b;line-height:1.8;margin:6px 0 0}.model-property-policy{font-size:12px;line-height:1.7;padding:3px 0}.model-property-policy small{display:block;color:#8c9c94;font-size:11px}.model-property-policy .model-policy-pending{color:#a27e43}.model-policy-save{background:#fffaf0;border-color:#eee1bf}.model-policy-save>div:last-child{display:flex;gap:8px;flex-wrap:wrap}.model-policy-save .el-button+.el-button{margin:0}@media(max-width:800px){.model-policy-context,.model-policy-save{align-items:flex-start;flex-direction:column}}
+.model-policy-context,.model-policy-save{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px;border:1px solid var(--line);border-radius:8px;background:var(--surface-secondary);margin:20px 0}.model-policy-context strong,.model-policy-save strong{font-size:13px;color:var(--text-primary)}.model-policy-context p,.model-policy-save p{font-size:12px;color:var(--text-secondary);line-height:1.8;margin:6px 0 0}.model-property-policy{font-size:12px;line-height:1.7;padding:3px 0}.model-property-policy small{display:block;color:var(--text-secondary);font-size:11px}.model-property-policy .model-policy-pending{color:#a27e43}.model-policy-save{background:#fffaf0;border-color:#eee1bf}.model-policy-save>div:last-child{display:flex;gap:8px;flex-wrap:wrap}.model-policy-save .el-button+.el-button{margin:0}@media(max-width:800px){.model-policy-context,.model-policy-save{align-items:flex-start;flex-direction:column}}
 </style>
-<style scoped>.product-detail-tabs{padding:24px}.unsaved-dot{color:var(--el-color-warning)}.product-detail-tabs h2{margin:16px 0}.product-detail-tabs :deep(.page-heading h1){font-size:22px}.product-detail-tabs ol{line-height:2}.product-detail-tabs :deep(.tenant-context-info){margin-top:12px}</style>
+<style scoped>.product-detail-tabs{padding:0 26px 28px}.product-detail-tabs>:deep(.el-tabs)>.el-tabs__header{margin:0 -26px 26px;padding:0 26px}.product-detail-tabs>.el-alert{margin-top:20px}.unsaved-dot{color:var(--el-color-warning)}.product-detail-tabs h2{margin:16px 0}.product-detail-tabs :deep(.page-heading h1){font-size:22px}.product-detail-tabs ol{line-height:2}.product-detail-tabs :deep(.tenant-context-info){margin-top:12px}</style>

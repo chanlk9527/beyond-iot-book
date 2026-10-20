@@ -86,6 +86,7 @@ public final class KafkaEventBus implements EventBus, AutoCloseable, org.springf
     }
 
     @Override public boolean supportsCluster() { return true; }
+    @Override public boolean supportsDurablePublish() { return true; }
 
     @Override public Subscription subscribe(String pattern, EventSubscriber subscriber) {
         throw new IllegalArgumentException("Kafka subscriptions require a named SubscriptionSpec (service group or node broadcast)");
@@ -96,6 +97,12 @@ public final class KafkaEventBus implements EventBus, AutoCloseable, org.springf
     }
 
     @Override public synchronized Subscription subscribe(SubscriptionSpec spec, EventSubscriber subscriber) {
+        return subscribe(spec, com.nebula.iot.message.routing.EventSelector.all(), subscriber);
+    }
+    @Override public synchronized Subscription subscribe(SubscriptionSpec spec, com.nebula.iot.message.routing.EventSelector selector, EventSubscriber subscriber) {
+        Objects.requireNonNull(selector, "selector");
+        if(spec.sourceScope()!=SubscriptionSpec.SourceScope.ALL)
+            throw new IllegalArgumentException("Kafka source-scoped subscriptions are not supported; use Dubbo for LOCAL/REMOTE routing");
         ensureOpen();
         Objects.requireNonNull(subscriber, "subscriber");
         if (subscriptions.containsKey(spec.name())) throw new IllegalArgumentException("Duplicate subscription name: " + spec.name());
@@ -115,7 +122,7 @@ public final class KafkaEventBus implements EventBus, AutoCloseable, org.springf
         properties.setMissingTopicsFatal(true);
         properties.setMessageListener((MessageListener<String, byte[]>) record -> {
             EventMessage event = codec.decode(record.value());
-            if (spec.matches(event.topic())) {
+            if (spec.matches(event.topic()) && selector.matches(event)) {
                 Future<?> work = null;
                 try {
                     // Ordered per partition, bounded wait. A timeout does not cancel external business effects.

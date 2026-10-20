@@ -24,6 +24,11 @@ public final class RegisteredMqttAccess implements DeviceAuthenticator, DeviceAc
         }
         return CompletableFuture.completedFuture(new AuthenticationResult.Rejected("INVALID_CREDENTIALS"));
     }
+    @Override public CompletionStage<Optional<DeviceAccessContext>> resolveChild(DeviceKey gateway, DeviceKey child) {
+        var directory = directories.getIfAvailable();
+        return CompletableFuture.completedFuture(directory == null ? Optional.empty()
+                : directory.resolveChild(gateway,child).map(access -> new DeviceAccessContext(access.device(),access.model())));
+    }
     @Override public CompletionStage<Optional<DeviceAccessContext>> resolve(DeviceKey key) {
         var directory = directories.getIfAvailable();
         return CompletableFuture.completedFuture(directory == null ? Optional.empty()

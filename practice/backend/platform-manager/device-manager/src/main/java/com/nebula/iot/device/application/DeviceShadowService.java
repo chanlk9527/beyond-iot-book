@@ -108,7 +108,7 @@ public final class DeviceShadowService {
                 if (value != null && !value.isNull()) property.schema().validate(fromJson(value));
             });
         } catch (java.io.IOException | IllegalArgumentException e) {
-            throw problem(HttpStatus.BAD_REQUEST, "Desired state must contain writable model properties with valid scalar values (max 64 KiB)");
+            throw problem(HttpStatus.BAD_REQUEST, "Desired state must contain writable model properties with valid model values (max 64 KiB)");
         }
     }
     private DeviceShadowStore store() {
@@ -131,22 +131,8 @@ public final class DeviceShadowService {
     private static DeviceKey key(Device device) {
         return new DeviceKey(new TenantId(device.tenantId() == null ? "platform" : device.tenantId()), new DeviceId(device.id()));
     }
-    private JsonNode toJson(Value value) {
-        return switch (value) {
-            case Value.BooleanValue v -> json.valueToTree(v.value());
-            case Value.IntegerValue v -> json.valueToTree(v.value());
-            case Value.DecimalValue v -> json.valueToTree(v.value());
-            case Value.TextValue v -> json.valueToTree(v.value());
-        };
-    }
-    private static Value fromJson(JsonNode value) {
-        if (value.isBoolean()) return new Value.BooleanValue(value.booleanValue());
-        if (value.isIntegralNumber() && value.canConvertToLong()) return new Value.IntegerValue(value.longValue());
-        if (value.isNumber() && !value.isIntegralNumber()) return new Value.DecimalValue(value.decimalValue());
-        if (value.isTextual()) return new Value.TextValue(value.textValue());
-        throw new IllegalArgumentException("Scalar value required");
-    }
-    private static ResponseStatusException conflict() { return problem(HttpStatus.CONFLICT, "Shadow changed; refresh before retrying"); }
+    private JsonNode toJson(Value value) { return com.nebula.iot.device.infrastructure.ValueJson.toJson(value); }
+    private static Value fromJson(JsonNode value) { return com.nebula.iot.device.infrastructure.ValueJson.fromJson(value); }    private static ResponseStatusException conflict() { return problem(HttpStatus.CONFLICT, "Shadow changed; refresh before retrying"); }
     private static ResponseStatusException unavailable() { return problem(HttpStatus.SERVICE_UNAVAILABLE, "Device shadow storage is unavailable"); }
     private static ResponseStatusException problem(HttpStatus status, String message) { return new ResponseStatusException(status, message); }
 }

@@ -16,7 +16,7 @@ public final class CommandJson {
     public CommandJson() {
         json.addMixIn(DownlinkBody.class,BodyType.class);json.addMixIn(Value.class,ValueType.class);
         json.registerSubtypes(new NamedType(DownlinkBody.PropertyWrite.class,"property-write"),new NamedType(DownlinkBody.OperationInvoke.class,"operation"),
-                new NamedType(Value.BooleanValue.class,"boolean"),new NamedType(Value.IntegerValue.class,"integer"),new NamedType(Value.DecimalValue.class,"decimal"),new NamedType(Value.TextValue.class,"text"));
+                new NamedType(Value.BooleanValue.class,"boolean"),new NamedType(Value.IntegerValue.class,"integer"),new NamedType(Value.DecimalValue.class,"decimal"),new NamedType(Value.TextValue.class,"text"),new NamedType(Value.ArrayValue.class,"array"));
     }
     public String encode(DeviceDownlink request) {
         if(!(request.body() instanceof DownlinkBody.PropertyWrite || request.body() instanceof DownlinkBody.OperationInvoke))throw new IllegalArgumentException("Unsupported durable command");

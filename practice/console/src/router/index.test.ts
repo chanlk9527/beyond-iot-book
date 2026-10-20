@@ -82,6 +82,11 @@ describe('page access guard', () => {
     state.session.account.platformAdmin=true
     expect(await visit('platform/access-nodes')).toBeUndefined()
   })
+  it('restricts event bus observations to platform administrators', async () => {
+    expect(await visit('platform/eventbus')).toEqual({name:'overview'})
+    state.session.account.platformAdmin=true
+    expect(await visit('platform/eventbus')).toBeUndefined()
+  })
   it('restricts platform reviews and redirects platform administrators to their own panel', async () => {
     expect(await visit('platform/openapi')).toEqual({name:'overview'})
     state.session.account.platformAdmin=true

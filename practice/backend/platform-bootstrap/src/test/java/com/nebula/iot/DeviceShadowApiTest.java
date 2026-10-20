@@ -67,7 +67,7 @@ class DeviceShadowApiTest {
             jdbc.update("INSERT INTO identity_role_permission(role_id,permission) VALUES ('r',?)", permission);
         for (String id : List.of("a","b","v")) jdbc.update("INSERT INTO identity_account_role(account_id,role_id) VALUES (?,'r')", id);
         String model = """
-            {"properties":{
+            {"properties":{"samples":{"id":"samples","access":"READ_WRITE","schema":{"type":"ARRAY","items":{"type":"DECIMAL","minimum":0,"maximum":100},"minItems":1,"maxItems":3}},
               "power":{"id":"power","schema":{"type":"BOOLEAN"},"access":"READ_WRITE"},
               "level":{"id":"level","schema":{"type":"INTEGER","minimum":1,"maximum":100},"access":"READ_WRITE"},
               "temperature":{"id":"temperature","schema":{"type":"DECIMAL"},"access":"READ_ONLY"},
@@ -90,7 +90,18 @@ class DeviceShadowApiTest {
                 "v1",time,NOW.plusSeconds(60),MessageOrigin.DEVICE,new DeviceMessageBody.PropertyReport(values)))
                 .toCompletableFuture().get(5, TimeUnit.SECONDS);
     }
-    @Test void desiredReportedDeltaAndPartialRemovalRoundTripThroughIngress() throws Exception {
+    @Test void arrayDesiredStateValidatesAndConvergesWithReports() throws Exception {
+        for (var invalid : List.of("[]", "[101]", "[\"1\"]", "[1,2,3,4]", "[[1]]"))
+            mvc.perform(put(A+"/desired").with(user("alice")).with(csrf()).contentType("application/json")
+                .content(desired(0,"{\"samples\":"+invalid+"}"))).andExpect(status().isBadRequest());
+        mvc.perform(put(A+"/desired").with(user("alice")).with(csrf()).contentType("application/json")
+            .content(desired(0,"{\"samples\":[1,2]}"))).andExpect(status().isOk())
+            .andExpect(jsonPath("$.desired.samples.value[1]").value(2));
+        report("ta","d1","array1",NOW,Map.of("samples",new Value.ArrayValue(List.of(
+            new Value.DecimalValue(new java.math.BigDecimal("1.0")),new Value.IntegerValue(2)))));
+        mvc.perform(get(A).with(user("alice"))).andExpect(status().isOk())
+            .andExpect(jsonPath("$.reported.samples.value[0]").value(1.0)).andExpect(jsonPath("$.delta").isEmpty());
+    }    @Test void desiredReportedDeltaAndPartialRemovalRoundTripThroughIngress() throws Exception {
         mvc.perform(get(A).with(user("alice"))).andExpect(status().isOk())
                 .andExpect(jsonPath("$.version").value(0)).andExpect(jsonPath("$.reported").isEmpty());
         mvc.perform(put(A+"/desired").with(user("alice")).with(csrf()).contentType("application/json")
@@ -176,4 +187,3 @@ class DeviceShadowApiTest {
         } finally { executor.shutdownNow(); }
     }
 }
-

@@ -27,6 +27,8 @@ class VertxMqttGatewayTest {
     private final List<Client> clients = new ArrayList<>();
     private final BlockingQueue<DeviceMessage> inbound = new LinkedBlockingQueue<>();
     private final AtomicBoolean enabled = new AtomicBoolean(true);
+    private final AtomicBoolean proxyAllowed = new AtomicBoolean(false);
+    private static final DeviceKey CHILD = new DeviceKey(new TenantId("tenant-a"),new DeviceId("child-1"));
     private Vertx vertx;
     private VertxMqttGateway gateway;
     private DevelopmentDeviceDirectory directory;
@@ -47,7 +49,14 @@ class VertxMqttGatewayTest {
     private VertxMqttGateway create(int port, DeviceMessageHandler handler) {
         var options = new MqttGatewayOptions("127.0.0.1", port, 20, 65536, 8, 2, 32,
                 Duration.ofSeconds(2), Duration.ofSeconds(2), Duration.ofSeconds(2));
-        DeviceAccessResolver resolver = key -> directory.resolve(key).thenApply(found -> enabled.get() ? found : Optional.empty());
+        DeviceAccessResolver resolver = new DeviceAccessResolver() {
+            public CompletionStage<Optional<DeviceAccessContext>> resolve(DeviceKey key) {
+                return directory.resolve(key).thenApply(found -> enabled.get()?found:Optional.empty());
+            }
+            public CompletionStage<Optional<DeviceAccessContext>> resolveChild(DeviceKey parent,DeviceKey child) {
+                return CompletableFuture.completedFuture(enabled.get()&&proxyAllowed.get()&&A.equals(parent)&&CHILD.equals(child)?Optional.of(access(CHILD)):Optional.empty());
+            }
+        };
         return new VertxMqttGateway(vertx, options, directory, resolver, new OfficialMqttCodec(), new OfficialSystemMessageHandler(message -> gateway.send(message), handler, Clock.systemUTC()));
     }
 
@@ -56,6 +65,59 @@ class VertxMqttGatewayTest {
         for (var client : clients) client.close();
         gateway.stop().toCompletableFuture().get(10, TimeUnit.SECONDS);
         vertx.close().toCompletionStage().toCompletableFuture().get(10, TimeUnit.SECONDS);
+    }
+
+    @Test void childMessagesKeepChildIdentityAndRequireOnlineAndProxyAuthorization() throws Exception {
+        proxyAllowed.set(true);
+        var a=connect("client-a","a",PASSWORD);
+        var b=connect("client-b","b",PASSWORD);
+        long rejected=gateway.rejectedMessageCount();
+        a.client.publish("nebula/v1/child/child-1/up",report(70),1,false);
+        await(()->gateway.rejectedMessageCount()==rejected+1);
+        a.client.publish("nebula/v1/child/child-1/online","{}".getBytes(StandardCharsets.UTF_8),1,false);
+        a.client.publish("nebula/v1/child/child-1/up",report(70),1,false);
+        var message=inbound.poll(2,TimeUnit.SECONDS);assertNotNull(message);assertEquals(CHILD,message.device());assertEquals(access(CHILD).device().product().productId(),message.productId());
+        a.client.publish("nebula/v1/child/child-1/up",report(101),1,false);
+        await(()->gateway.rejectedMessageCount()==rejected+2);
+        b.client.publish("nebula/v1/child/child-1/online","{}".getBytes(StandardCharsets.UTF_8),1,false);
+        await(()->gateway.rejectedMessageCount()==rejected+3);
+        assertTrue(a.client.isConnected());assertTrue(b.client.isConnected());assertTrue(inbound.isEmpty());
+        var receipt=gateway.send(command(CHILD,"child-command",60)).toCompletableFuture().get(3,TimeUnit.SECONDS);
+        assertEquals(CHILD,receipt.device());assertEquals("nebula/v1/child/child-1/down",a.messages.poll(2,TimeUnit.SECONDS).topic);
+        assertTrue(b.messages.isEmpty());
+        proxyAllowed.set(false);
+        assertThrows(ExecutionException.class,()->gateway.send(command(CHILD,"revoked",60)).toCompletableFuture().get(3,TimeUnit.SECONDS));
+        await(()->gateway.sessionCount()==2);assertTrue(a.client.isConnected());
+    }
+
+    @Test void childLeaseRoutesUseTheirOwnTokenAndParentDisconnectDoesNotResurrectChildren() throws Exception {
+        gateway.stop().toCompletableFuture().get(5,TimeUnit.SECONDS);
+        var leases=new ConcurrentHashMap<DeviceKey,SessionOwnership.Lease>();
+        var epoch=new java.util.concurrent.atomic.AtomicLong();
+        gateway.configureOwnership(new SessionOwnership(){
+            public Lease acquire(DeviceKey key,String clientId){var lease=new Lease(UUID.randomUUID().toString(),epoch.incrementAndGet(),10000);leases.put(key,lease);return lease;}
+            public Lease renew(DeviceKey key,Lease lease){if(!lease.equals(leases.get(key)))throw new SecurityException("Stale owner");return lease;}
+            public void release(DeviceKey key,Lease lease){leases.remove(key,lease);}
+        },()->true,()->true);
+        gateway.start().toCompletableFuture().get(5,TimeUnit.SECONDS);
+        proxyAllowed.set(true);
+        var a=connect("client-a","a",PASSWORD);
+        a.client.publish("nebula/v1/child/child-1/online","{}".getBytes(StandardCharsets.UTF_8),1,false);
+        var parent=leases.get(A);var child=leases.get(CHILD);assertNotNull(child);assertNotEquals(parent.sessionId(),child.sessionId());
+        var down=DeviceDownlink.from(command(CHILD,"token-command",60));
+        assertThrows(ExecutionException.class,()->gateway.sendToSession(down,parent.sessionId(),parent.epoch()).toCompletableFuture().get(3,TimeUnit.SECONDS));
+        assertEquals(CHILD,gateway.sendToSession(down,child.sessionId(),child.epoch()).toCompletableFuture().get(3,TimeUnit.SECONDS).device());
+        assertNotNull(a.messages.poll(2,TimeUnit.SECONDS));
+        a.client.disconnect();await(()->gateway.sessionCount()==0);await(()->leases.isEmpty());
+        var replacement=connect("client-a","a",PASSWORD);
+        assertThrows(ExecutionException.class,()->gateway.send(down).toCompletableFuture().get(3,TimeUnit.SECONDS));
+        replacement.client.publish("nebula/v1/child/child-1/online","{}".getBytes(StandardCharsets.UTF_8),1,false);
+        assertThrows(ExecutionException.class,()->gateway.sendToSession(down,child.sessionId(),child.epoch()).toCompletableFuture().get(3,TimeUnit.SECONDS));
+        var renewedChild=leases.get(CHILD);
+        // The parent's remote takeover must block a child send even before the periodic sweep runs.
+        leases.put(A,new SessionOwnership.Lease("remote-parent",epoch.incrementAndGet(),10000));
+        assertThrows(ExecutionException.class,()->gateway.sendToSession(down,renewedChild.sessionId(),renewedChild.epoch()).toCompletableFuture().get(3,TimeUnit.SECONDS));
+        await(()->gateway.sessionCount()==0);
     }
 
     @Test
@@ -81,6 +143,7 @@ class VertxMqttGatewayTest {
         var message = inbound.poll(2, TimeUnit.SECONDS);
         assertNotNull(message);
         assertEquals(A, message.device());
+        assertEquals(access(A).device().product().productId(), message.productId());
         assertEquals("v1", message.modelVersion());
         assertInstanceOf(DeviceMessageBody.PropertyReport.class, message.body());
         assertEquals(1, gateway.acceptedMessageCount());
@@ -319,6 +382,48 @@ class VertxMqttGatewayTest {
         assertTrue(client.messages.isEmpty());
     }
 
+    @Test
+    void websocketSharesAuthenticationUplinkAndDirectDownlinkWithTcp() throws Exception {
+        gateway.stop().toCompletableFuture().get(5, TimeUnit.SECONDS);
+        gateway.enableWebSocket(0);
+        gateway.start().toCompletableFuture().get(5, TimeUnit.SECONDS);
+        var ws = new Client("client-a", "ws://127.0.0.1:" + gateway.actualWebSocketPort() + "/mqtt");
+        clients.add(ws);
+        assertThrows(MqttException.class, () -> ws.client.connect(connectionOptions("a", "wrong".getBytes(StandardCharsets.UTF_8))));
+        ws.client.connect(connectionOptions("a", PASSWORD));
+        var tcp = connect("client-b", "b", PASSWORD);
+        ws.client.publish("nebula/v1/up", report(60), 1, false);
+        assertEquals(A, inbound.poll(2, TimeUnit.SECONDS).device());
+        gateway.send(command(A, "ws-command", 50)).toCompletableFuture().get(5, TimeUnit.SECONDS);
+        var down = ws.messages.poll(2, TimeUnit.SECONDS);
+        assertNotNull(down); assertEquals("nebula/v1/down", down.topic);
+        assertTrue(tcp.messages.isEmpty());
+        var reply = "{\"version\":\"1.0\",\"messageId\":\"ws-reply\",\"method\":\"thing.command.reply\",\"timestamp\":0,\"replyTo\":\"ws-command\",\"result\":{\"code\":\"SUCCESS\"},\"data\":{\"commandId\":\"ws-command\",\"status\":\"SUCCEEDED\"}}";
+        ws.client.publish("nebula/v1/up", reply.getBytes(StandardCharsets.UTF_8), 1, false);
+        assertInstanceOf(DeviceMessageBody.CommandReply.class, inbound.poll(2, TimeUnit.SECONDS).body());
+        long rejected = gateway.rejectedMessageCount();
+        try { ws.client.publish("nebula/v1/up", report(101), 1, false); } catch (MqttException expected) { }
+        await(() -> gateway.rejectedMessageCount() == rejected + 1);
+        assertTrue(inbound.isEmpty());
+        assertTrue(ws.client.isConnected());
+        gateway.stop().toCompletableFuture().get(5, TimeUnit.SECONDS);
+        assertEquals(-1, gateway.actualWebSocketPort());
+        await(() -> !ws.client.isConnected() && !tcp.client.isConnected());
+    }
+
+    @Test
+    void websocketBindFailureClosesBothListenersAndAllowsRetry() throws Exception {
+        gateway.stop().toCompletableFuture().get(5, TimeUnit.SECONDS);
+        try (var occupied = new java.net.ServerSocket(0)) {
+            gateway.enableWebSocket(occupied.getLocalPort());
+            assertThrows(ExecutionException.class, () -> gateway.start().toCompletableFuture().get(5, TimeUnit.SECONDS));
+            assertFalse(gateway.isRunning());
+        }
+        gateway.enableWebSocket(0);
+        gateway.start().toCompletableFuture().get(5, TimeUnit.SECONDS);
+        assertTrue(gateway.actualPort() > 0); assertTrue(gateway.actualWebSocketPort() > 0);
+    }
+
     private Client connect(String id, String username, byte[] password) throws Exception {
         var client = new Client(id);
         clients.add(client);
@@ -354,7 +459,10 @@ class VertxMqttGatewayTest {
         final MqttClient client;
         final BlockingQueue<Received> messages = new LinkedBlockingQueue<>();
         Client(String id) throws MqttException {
-            client = new MqttClient("tcp://127.0.0.1:" + gateway.actualPort(), id, new MemoryPersistence());
+            this(id, "tcp://127.0.0.1:" + gateway.actualPort());
+        }
+        Client(String id, String uri) throws MqttException {
+            client = new MqttClient(uri, id, new MemoryPersistence());
             client.setTimeToWait(5000);
             client.setCallback(new MqttCallback() {
                 @Override public void messageArrived(String topic, MqttMessage message) {

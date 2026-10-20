@@ -28,6 +28,8 @@ public class RegisteredDeviceDirectory implements DeviceConnectionDirectory {
     @Override public Optional<DeviceKey> authenticate(String clientId, String username, byte[] password) {
         if (clientId == null || !clientId.equals(username) || clientId.length() > 36
                 || password == null || password.length == 0 || password.length > 72) return Optional.empty();
+        var registered = data.device(null, clientId);
+        if (registered == null || "CHILD".equals(deviceType(registered.scopeKey(), registered.productId()))) return Optional.empty();
         var row = cache.get(clientId);
         if (row == null) return Optional.empty();
         try {
@@ -48,6 +50,29 @@ public class RegisteredDeviceDirectory implements DeviceConnectionDirectory {
         } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {
             throw new IllegalStateException("Invalid published device model", invalid);
         }
+    }
+
+    @Override public Optional<Access> resolveChild(DeviceKey gateway, DeviceKey child) {
+        if (!gateway.tenantId().equals(child.tenantId()) || gateway.equals(child)) return Optional.empty();
+        String scope = gateway.tenantId().value();
+        var parent = data.connection(gateway.deviceId().value());
+        var target = data.connection(child.deviceId().value());
+        if (parent == null || target == null || !scope.equals(parent.scopeKey()) || !scope.equals(target.scopeKey())
+                || !"GATEWAY".equals(deviceType(scope, parent.productId()))
+                || !"CHILD".equals(deviceType(scope, target.productId()))
+                || !gateway.deviceId().value().equals(data.parentGateway(scope, child.deviceId().value()))) return Optional.empty();
+        try {
+            var spec = json.readValue(target.modelJson(), ModelSpec.class);
+            var product = new ProductKey(child.tenantId(),new ProductId(target.productId()));
+            return Optional.of(new Access(new DeviceDescriptor(child,product,target.modelVersion(),DeviceLifecycle.ACTIVE),
+                    new DeviceModel(product,target.modelVersion(),spec.properties(),spec.events(),spec.operations())));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) { throw new IllegalStateException("Invalid child model",invalid); }
+    }
+    private String deviceType(String scope,String productId) {
+        var product = data.product(scope,productId);
+        if (product == null) return "";
+        try { return json.readValue(product.configuration(),com.nebula.iot.device.api.ProductConfiguration.class).deviceType(); }
+        catch (com.fasterxml.jackson.core.JsonProcessingException invalid) { throw new IllegalStateException("Invalid product configuration",invalid); }
     }
 
     /** Called after a device/model eligibility change commits. */

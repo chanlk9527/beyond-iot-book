@@ -11,7 +11,13 @@ import com.nebula.iot.core.message.ReplyResult;
 /** Enriched ingress envelope. Device clocks may differ from platform clocks. */
 public record DeviceMessage(MessageId messageId, DeviceKey device, String modelVersion,
                             Instant occurredAt, Instant receivedAt,
-                            MessageOrigin origin, DeviceMessageBody body, Optional<MessageId> replyTo, Optional<ReplyResult> result) {
+                            MessageOrigin origin, DeviceMessageBody body, Optional<MessageId> replyTo, Optional<ReplyResult> result,
+                            com.nebula.iot.core.identity.ProductId productId) {
+    public DeviceMessage(MessageId messageId, DeviceKey device, String modelVersion, Instant occurredAt,
+                         Instant receivedAt, MessageOrigin origin, DeviceMessageBody body,
+                         Optional<MessageId> replyTo, Optional<ReplyResult> result) {
+        this(messageId, device, modelVersion, occurredAt, receivedAt, origin, body, replyTo, result, null);
+    }
     public DeviceMessage(MessageId messageId, DeviceKey device, String modelVersion, Instant occurredAt,
                          Instant receivedAt, MessageOrigin origin, DeviceMessageBody body) {
         this(messageId, device, modelVersion, occurredAt, receivedAt, origin, body, Optional.empty(), Optional.empty());

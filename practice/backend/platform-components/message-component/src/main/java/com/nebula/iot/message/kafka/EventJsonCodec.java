@@ -39,7 +39,7 @@ public final class EventJsonCodec {
         json.registerSubtypes(new NamedType(Value.BooleanValue.class, "boolean"),
                 new NamedType(Value.IntegerValue.class, "integer"),
                 new NamedType(Value.DecimalValue.class, "decimal"),
-                new NamedType(Value.TextValue.class, "text"));
+                new NamedType(Value.TextValue.class, "text"), new NamedType(Value.ArrayValue.class, "array"));
     }
 
     @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "valueType")
@@ -78,7 +78,7 @@ public final class EventJsonCodec {
             Object payload = json.treeToValue(root.required("event").required("payload"), target);
             return new EventMessage(envelope.eventId(), envelope.topic(), envelope.occurredAt(), envelope.receivedAt(),
                     envelope.tenantId(), envelope.deviceId(), envelope.modelVersion(), envelope.messageId(),
-                    envelope.source(), envelope.headers(), payload);
+                    envelope.source(), envelope.headers(), payload, envelope.productId());
         } catch (java.io.IOException e) {
             throw new IllegalArgumentException("Cannot decode event", e);
         }

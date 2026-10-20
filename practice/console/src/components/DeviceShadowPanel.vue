@@ -1,15 +1,17 @@
 <script setup lang="ts">
+import {initialValue,type ValueSchema} from './modelSchema'
 import { computed, onScopeDispose, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { catalogApi, resourceScope, type Device, type DeviceShadow, type ModelSpec, type ShadowScalar, type DownlinkStatus } from '../api/catalog'
 import { snapshotRefresh } from '../realtime/snapshotRefresh'
 import { useDeviceSubscription } from '../realtime/deviceSubscription'
 import { errorMessage, isCancelled } from '../api/management'
+import DeviceValueInput from './DeviceValueInput.vue'
 import StatePanel from './StatePanel.vue'
 import DownlinkResult from './DownlinkResult.vue'
 
 const props = defineProps<{ scope:string; device:Device; model:ModelSpec; writable:boolean }>()
-type Definition = { id:string; access:string; schema:{ type:string; minimum?:number|null; maximum?:number|null; maxLength?:number|null } }
+type Definition = { id:string; name?:string; access:string; schema:ValueSchema }
 const definitions = computed(() => Object.values(props.model.properties) as Definition[])
 const editable = computed(() => definitions.value.filter(p => p.access === 'READ_WRITE'))
 const shadow = ref<DeviceShadow|null>(null), loading = ref(true), busy = ref(false), error = ref(''), saveError = ref('')
@@ -51,7 +53,7 @@ async function load() {
     for(const p of editable.value) {
       const target=shadow.value.desired[p.id]
       selected.value[p.id]=!!target
-      values.value[p.id]=target?.value ?? (p.schema.type==='BOOLEAN'?false:p.schema.type==='TEXT'?'':(p.schema.minimum??0))
+      values.value[p.id]=target?.value ?? initialValue(p.schema)
     }
   } catch(e) { if(!isCancelled(e)) error.value=errorMessage(e) }
   finally { loading.value=false;if(refreshAgain){refreshAgain=false;stateRefresh.schedule()} }
@@ -105,10 +107,8 @@ void load()
     <template v-if="canEdit">
       <h3>设置期望状态</h3><p class="muted">取消勾选可移除目标值。</p>
       <div v-for="p in editable" :key="p.id" class="shadow-field">
-        <el-checkbox v-model="selected[p.id]" :disabled="busy" :aria-label="'设置 '+p.id+' 期望值'">{{p.id}}</el-checkbox>
-        <el-select v-if="p.schema.type==='BOOLEAN'" v-model="values[p.id]" :disabled="!selected[p.id]||busy" :aria-label="p.id+' 期望值'"><el-option label="true" :value="true"/><el-option label="false" :value="false"/></el-select>
-        <el-input v-else-if="p.schema.type==='TEXT'" v-model="values[p.id]" :maxlength="p.schema.maxLength??4096" :disabled="!selected[p.id]||busy" :aria-label="p.id+' 期望值'"/>
-        <el-input-number v-else :model-value="typeof values[p.id]==='number'?Number(values[p.id]):undefined" @update:model-value="(v:number|undefined|null)=>{if(v!==undefined&&v!==null)values[p.id]=v}" :min="p.schema.minimum??undefined" :max="p.schema.maximum??undefined" :precision="p.schema.type==='INTEGER'?0:undefined" :disabled="!selected[p.id]||busy" :aria-label="p.id+' 期望值'"/>
+        <el-checkbox v-model="selected[p.id]" :disabled="busy" :aria-label="'设置 '+p.id+' 期望值'">{{p.name||p.id}}</el-checkbox>
+        <DeviceValueInput v-model="values[p.id]" :schema="p.schema" :disabled="!selected[p.id]||busy" :label="p.id+' 期望值'"/>
       </div>
       <p v-if="!editable.length" class="muted">当前模型没有可设置期望值的读写属性。</p>
       <el-alert v-if="saveError" :title="saveError" type="error" :closable="false"/>

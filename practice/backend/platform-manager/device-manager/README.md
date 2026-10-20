@@ -46,7 +46,7 @@ Spring MVC、MyBatis、PostgreSQL／MySQL管理模块，随`management` profile�
 
 名称1～100字符，description必填字符串、最多1000字符。新模型版本由服务端自动分配，不接收客户端指定的版本号。已有手写版本保持不变，标准 vN 数字标签的最大值加一作为下一个版本（例如已有 v9、v2，则生成 v10）；其他历史标签不参与递增。所有修改使用revision，过期或冲突返回409；范围内无对应资源返回404，越权403，模型／参数错误400。
 
-模型JSON结构为`{properties:{},events:{},operations:{}}`，复用core的PropertyDefinition／EventDefinition／OperationDefinition／ValueSchema。定义ID须匹配Map键，使用字母开头的字母、数字、下划线，最多64字符。支持BOOLEAN、INTEGER、DECIMAL、TEXT及核心既有范围／长度约束。每类最多100个定义，事件和操作各最多100个字段，序列化模型最多65536字符。
+模型JSON结构为`{properties:{},events:{},operations:{}}`，复用core的PropertyDefinition／EventDefinition／OperationDefinition／ValueSchema。定义ID须匹配Map键，使用字母开头的字母、数字、下划线，最多64字符。支持 BOOLEAN、INTEGER、DECIMAL、TEXT、ENUM、ARRAY，以及范围／长度、枚举选项、数组项数和单位元数据。定义格式与限制见 [物模型说明](../../../docs/thing-model.md)。每类最多100个定义，事件和操作各最多100个字段，序列化模型最多65536字符。
 
 ```json
 {
@@ -77,9 +77,39 @@ GET `/products` 的 category 参数为空时返回全部，一级 ID 匹配其�
 
 配置包括 category、manufacturer、modelNumber、deviceType（DIRECT/GATEWAY/CHILD）、networkWay（ETHERNET/WIFI/CELLULAR/NB_IOT/LORA/OTHER）、transportProtocol（MQTT）、messageProtocol（nebula-mqtt-v1）、dataFormat（JSON）、firmwareVersion、supportUrl 与 installationNotes。普通文本最多100字符，文档地址及维护说明最多1000字符，配置序列化后最多8192字符；文档地址仅接受 HTTP(S)。
 
-这些配置属于产品档案和接入规划，不随物模型版本冻结。网关/子设备类型不启用拓扑、代理认证或消息转发；入网方式不配置网络监听。正常MQTT服务已使用登记凭证认证，设备需为ACTIVE且产品与所属租户启用。产品级数据策略已独立持久化，支持最新属性值开关、逐次历史采集与按天保留，部署及高级策略限制见[历史存储说明](../../platform-components/storage-component/README.md)。动态协议插件及按产品选择协议尚未实现。
+这些配置属于产品档案和接入规划，不随物模型版本冻结。网关／子设备已支持同范围拓扑绑定、网关代理上下线、上报和下行，设备端接入约定统一见[MQTT 默认设备协议](../../../docs/mqtt-protocol.md)；入网方式不配置网络监听。正常MQTT服务已使用登记凭证认证，设备需为ACTIVE且产品与所属租户启用。产品级数据策略已独立持久化，支持最新属性值开关、逐次历史采集与按天保留，部署及高级策略限制见[历史存储说明](../../platform-components/storage-component/README.md)。动态协议插件及按产品选择协议尚未实现。
 
 参考：https://github.com/jetlinks/jetlinks-community/blob/master/jetlinks-manager/device-manager/src/main/java/org/jetlinks/community/device/entity/DeviceProductEntity.java
+
+## 网关拓扑管理
+
+设备详情的“网关拓扑”页签提供绑定与解绑：网关页输入子设备 ID，子设备页输入网关设备 ID。先分别创建 `GATEWAY`、`CHILD` 产品，发布各自物模型并登记设备，再建立同范围关系。
+
+关系限定为同一实际租户／平台范围内的单层 `GATEWAY → CHILD`，每个子设备只绑定一个网关，每个网关最多1024个子设备。绑定时，双方设备、产品及所属租户须具备有效接入资格。更换网关须先解绑当前关系，不能覆盖旧绑定。已登记设备的产品不能更改设备类型，删除设备前须先解除关联的全部拓扑。
+
+相对本模块范围前缀提供以下接口：
+
+| 方法与路径 | 请求与结果 |
+| --- | --- |
+| GET `/devices/{id}/topology?page=1&size=20` | 返回 `{gateway,children:{items,total,page,size}}`；gateway 为当前设备的父网关或 null，children 为当前设备的下挂子设备；size 最多100 |
+| PUT `/devices/{childId}/gateway` | `{gatewayId,revision}`；revision 为子设备当前修订号 |
+| DELETE `/devices/{childId}/gateway?gatewayId=...&revision=...` | 使用子设备当前修订号精确解绑该关系 |
+
+读取要求 `device:read`。绑定和解绑要求 `device:write`、资源范围写资格，返回拓扑还要求 `device:read`；普通租户成员必须是 OWNER／ADMIN。保留登录、CSRF、revision 冲突保护和事务审计。绑定／解绑递增子设备 revision，过期修订号或绑定关系冲突返回409。平台聚合目录读取租户设备后，写操作仍使用设备实际租户路径。
+
+V29 在 PostgreSQL／H2 和 MySQL 迁移目录新增 `device_gateway_child` 表。数据库外键约束双方归属范围，阻止跨范围绑定和带拓扑的设备删除。关系写入按固定顺序取得产品锁，并使用 READ_COMMITTED 复核最新设备状态，避免等待并发写入后继续使用旧快照。
+
+绑定不代表在线。绑定／解绑或设备资格撤销会使相关子设备会话重新校验；其他节点通过逐消息校验与周期复核收敛，不承诺跨节点零延迟撤销。子设备不能使用自身凭证直接连接 MQTT。网关认证、代理 Topic、上下线固定载荷、业务报文和断线重连规则统一维护在[MQTT 默认设备协议](../../../docs/mqtt-protocol.md)。
+
+### 网关接入验证
+
+`GatewayApiTest` 使用隔离 H2、真实 Flyway／MyBatis／HTTP 安全链和 Paho MQTT 5，覆盖拓扑类型、同租户授权、只读／CSRF限制、修订号冲突、删除保护、拒绝子设备直连、非法代理、子设备属性上报、下行执行回复、断线重连与解绑后拒绝下行。测试关闭 Worker 消费者，以独立验证接入路由，不替代 Redis 影子和历史存储验收。
+
+`VertxMqttGatewayTest` 验证子设备身份与模型、父网关断线清理、独立会话令牌、旧令牌拒绝和父网关被接管时拒绝子设备下行。令牌场景使用内存 ownership 适配；尚未专门执行子设备的多 JVM 集群故障或真实 PostgreSQL／MySQL 并发验收。`OfficialMqttCodecTest` 验证子设备寻址、固定状态载荷与非法 Topic。
+
+```powershell
+mvn -B -ntp -s .mvn/settings-central.xml -pl platform-bootstrap -am '-Dtest=GatewayApiTest,VertxMqttGatewayTest,OfficialMqttCodecTest,JdbcDeviceSessionDirectoryTest,CatalogApiTest' '-Dsurefire.failIfNoSpecifiedTests=false' test
+```
 
 ## 凭证与生命周期
 
@@ -93,7 +123,7 @@ GET `/products` 的 category 参数为空时返回全部，一级 ID 匹配其�
 
 `CatalogApiTest` 通过 Spring 安全链、Flyway、MyBatis 和 H2 PostgreSQL 兼容模式验证归属、授权、模型版本、凭证、生命周期和并发冲突。H2 测试不替代真实 PostgreSQL 验证。
 
-已接入登记凭证认证与注册解析、在线查询、属性／事件上行、影子／历史处理及属性写入／操作控制。Kafka模式下上行在broker确认后完成接收，不等待全部消费者；Local模式无持久消息保障。通用可靠交付、影子更新与通知原子发布、OTA和批量导入仍待实现。具体装配由bootstrap或独立服务负责，测试范围见[后端说明](../../README.md)。
+已接入登记凭证认证与注册解析、在线查询、属性／事件上行、影子／历史处理及属性写入／操作控制。Kafka 模式下上行在 broker 确认后完成接收；Dubbo 模式以匹配目标的持久投递提交为接收边界，均不等待全部业务消费者。Local 模式无持久消息保障。通用可靠交付、影子更新与通知原子发布、OTA和批量导入仍待实现。具体装配由bootstrap或独立服务负责，测试范围见[后端说明](../../README.md)。
 
 ## 设备影子（Redis）
 

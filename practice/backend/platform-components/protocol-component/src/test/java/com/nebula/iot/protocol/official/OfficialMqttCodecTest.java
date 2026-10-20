@@ -28,6 +28,24 @@ class OfficialMqttCodecTest {
     private static final OfficialMqttCodec CODEC = new OfficialMqttCodec(Clock.fixed(NOW, ZoneOffset.UTC));
     private static final ObjectMapper JSON = new ObjectMapper();
 
+    @Test void childAddressingKeepsIdentityOutsideBusinessPayloadAndRejectsMalformedRoutes() {
+        var payload=new BinaryPayload(envelope("thing.property.report","{\"properties\":{\"power\":true}}","SUCCESS").getBytes(StandardCharsets.UTF_8));
+        var route=CODEC.childRoute(new ProtocolPacket(payload,Map.of("topic","nebula/v1/child/child-1/up"))).orElseThrow();
+        assertEquals("child-1",route.deviceId().value());assertEquals(DeviceMessageCodec.ChildRoute.Action.MESSAGE,route.action());
+        assertEquals(OfficialMqttCodec.UPLINK_TOPIC,route.packet().attributes().get("topic"));
+        assertInstanceOf(DeviceMessageBody.PropertyReport.class,CODEC.decode(route.packet(),CONTEXT).getFirst().body());
+        var down=CODEC.encodeChild(down(new DownlinkBody.PropertyWrite(Map.of("heatingLevel",new Value.IntegerValue(50)))),Transport.MQTT);
+        assertEquals("nebula/v1/child/warmer-1/down",down.attributes().get("topic"));
+        for(var suffix:List.of("online","offline")) {
+            var state=CODEC.childRoute(new ProtocolPacket(new BinaryPayload("{}".getBytes(StandardCharsets.UTF_8)),Map.of("topic","nebula/v1/child/child-1/"+suffix))).orElseThrow();
+            assertEquals(suffix.toUpperCase(Locale.ROOT),state.action().name());
+            assertThrows(IllegalArgumentException.class,()->CODEC.childRoute(new ProtocolPacket(payload,Map.of("topic","nebula/v1/child/child-1/"+suffix))));
+        }
+        for(var topic:List.of("nebula/v1/child/+/up","nebula/v1/child//up","nebula/v1/child/id/extra/up","nebula/v1/child/id/down"))
+            assertThrows(IllegalArgumentException.class,()->CODEC.childRoute(new ProtocolPacket(payload,Map.of("topic",topic))));
+        assertTrue(CODEC.childRoute(new ProtocolPacket(payload,Map.of("topic",OfficialMqttCodec.UPLINK_TOPIC))).isEmpty());
+    }
+
     static Stream<Arguments> uplinks() {
         return Stream.of(
             Arguments.of("thing.property.report", "{\"properties\":{\"power\":true,\"heatingLevel\":70,\"temperature\":25.5,\"name\":\"灯\"}}", DeviceMessageBody.PropertyReport.class),
@@ -156,7 +174,15 @@ class OfficialMqttCodecTest {
         var protocol = new OfficialMqttProtocol(request -> CompletableFuture.completedFuture(new AuthenticationResult.Rejected("TEST")));
         assertEquals("nebula-mqtt-v1", protocol.id()); assertEquals(Set.of(Transport.MQTT), protocol.supportedTransports()); assertNotNull(protocol.authenticator());
     }
-    private static DownlinkBody.OtaUpgrade upgrade() {
+    @Test void arraysRemainArraysOnTheWire() throws Exception {
+        var body = (DeviceMessageBody.PropertyReport) decode(envelope("thing.property.report", "{\"properties\":{\"samples\":[1,2.5]}}", "SUCCESS")).body();
+        var array = assertInstanceOf(Value.ArrayValue.class, body.properties().get("samples"));
+        assertEquals(2, array.value().size());
+        var packet = CODEC.encode(down(new DownlinkBody.PropertyWrite(body.properties())), Transport.MQTT);
+        assertEquals(JSON.readTree("[1,2.5]"), JSON.readTree(packet.payload().copyBytes()).path("data").path("properties").path("samples"));
+        for (var invalid : List.of("[[1]]", "[null]", "[{}]"))
+            assertThrows(IllegalArgumentException.class, () -> decode(envelope("thing.property.report", "{\"properties\":{\"samples\":" + invalid + "}}", "SUCCESS")));
+    }    private static DownlinkBody.OtaUpgrade upgrade() {
         return new DownlinkBody.OtaUpgrade("t1", "a1", "main", "1.0", "2.0", "A",
                 new DownlinkBody.FirmwarePackage(URI.create("https://firmware.example.com/main-2.bin"), 1024, "a".repeat(64), "firmware-key-1", Base64.getEncoder().encodeToString(new byte[64])));
     }

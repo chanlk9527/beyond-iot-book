@@ -32,7 +32,7 @@ const networks={ETHERNET:'以太网',WIFI:'Wi-Fi',CELLULAR:'蜂窝网络（4G / 
 <label><span>数据格式（必选，已默认）</span><el-select v-model="config.dataFormat" :disabled="disabled"><el-option label="JSON" value="JSON"/></el-select></label>
 <label>认证方式（系统生成）<el-input model-value="设备独立凭证" disabled/><span class="muted small">登记设备时生成，凭证在设备管理中轮换。</span></label>
 </div>
-<el-alert v-if="config.deviceType!=='DIRECT'" title="网关和子设备类型目前仅记录接入规划；拓扑绑定、代理认证和消息转发尚未接入。" type="warning" :closable="false" show-icon/>
+<el-alert v-if="config.deviceType!=='DIRECT'" title="网关通过 MQTT 代理已绑定子设备上下线、上报和控制；底层通信由网关适配。登记设备后不能更改设备类型。" type="info" :closable="false" show-icon/>
 <p class="muted small">入网方式为产品档案信息。监听地址、端口和 TLS 由平台部署配置管理；此处保存不会启动或变更网络服务。</p>
 <el-divider/>
 </template><template v-if="section!=='access'"><h3>运维资料</h3><div class="configuration-grid"><label class="full">技术文档地址（选填）<el-input v-model="config.supportUrl" maxlength="1000" placeholder="https://example.com/device-guide" :disabled="disabled"/></label><label class="full">安装与维护说明（选填）<el-input v-model="config.installationNotes" type="textarea" :rows="3" maxlength="1000" show-word-limit placeholder="安装环境、供电方式、维护注意事项等" :disabled="disabled"/></label></div>

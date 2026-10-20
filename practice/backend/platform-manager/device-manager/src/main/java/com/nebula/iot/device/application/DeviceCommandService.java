@@ -180,12 +180,7 @@ public final class DeviceCommandService {
                 if (item.getKey() == null || value == null || value.isNull()) throw new IllegalArgumentException("参数不能为空");
                 size += item.getKey().length() + value.toString().length();
                 if (size > 16384) throw new IllegalArgumentException("参数过大");
-                Value scalar;
-                if (value.isBoolean()) scalar = new Value.BooleanValue(value.booleanValue());
-                else if (value.isIntegralNumber() && value.canConvertToLong()) scalar = new Value.IntegerValue(value.longValue());
-                else if (value.isFloatingPointNumber()) scalar = new Value.DecimalValue(value.decimalValue());
-                else if (value.isTextual()) scalar = new Value.TextValue(value.textValue());
-                else throw new IllegalArgumentException("参数必须是布尔、数字或文本");
+                Value scalar = com.nebula.iot.device.infrastructure.ValueJson.fromJson(value);
                 values.put(item.getKey(), scalar);
             }
         } catch (IllegalArgumentException e) { throw problem(HttpStatus.BAD_REQUEST, e.getMessage()); }

@@ -35,4 +35,11 @@ class RuntimeRoleEnvironmentTest {
         }
         assertThrows(IllegalArgumentException.class,()->new RuntimeRoleEnvironment().postProcessEnvironment(new MockEnvironment().withProperty("nebula.runtime.role","typo"),new SpringApplication()));
     }
+    @Test void independentServicesAllowDubboButRejectAnUnknownTransport() {
+        var environment=new MockEnvironment().withProperty("nebula.management.enabled","true").withProperty("nebula.eventbus.mode","dubbo");
+        environment.getPropertySources().addLast(new org.springframework.core.env.MapPropertySource("defaultProperties",Map.of("nebula.runtime.service","worker")));
+        new RuntimeRoleEnvironment().postProcessEnvironment(environment,new SpringApplication());
+        assertEquals("worker",environment.getProperty("nebula.runtime.role"));
+        assertThrows(IllegalArgumentException.class,()->new RuntimeRoleEnvironment().postProcessEnvironment(new MockEnvironment().withProperty("nebula.eventbus.mode","typo"),new SpringApplication()));
+    }
 }
