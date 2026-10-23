@@ -4,5 +4,5 @@
     <parent><groupId>com.nebula.iot</groupId><artifactId>nebula-platform-parent</artifactId><version>0.1.0-SNAPSHOT</version><relativePath>../pom.xml</relativePath></parent>
     <artifactId>platform-components</artifactId>
     <packaging>pom</packaging>
-    <modules><module>cluster-component</module><module>gateway-component</module><module>protocol-component</module><module>network-component</module><module>message-component</module><module>media-component</module><module>storage-component</module></modules>
+    <modules><module>cluster-component</module><module>gateway-component</module><module>protocol-component</module><module>network-component</module><module>message-component</module><module>media-component</module><module>storage-component</module><module>file-component</module></modules>
 </project>

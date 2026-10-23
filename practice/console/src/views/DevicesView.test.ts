@@ -2,6 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRenderer, defineComponent, h, nextTick } from 'vue'
 import DevicesView from './DevicesView.vue'
+import {deviceFirmwareApi} from '../api/deviceFirmware'
+vi.mock('../api/deviceFirmware',()=>({deviceFirmwareApi:{inventories:vi.fn()}}))
 import { catalogApi, defaultProductConfiguration, type Product } from '../api/catalog'
 
 const context=vi.hoisted(()=>({
@@ -29,9 +31,11 @@ const renderer=createRenderer<Node,Node>({
 const text=(n:Node):string=>n.text+n.children.map(text).join('')
 const all=(n:Node):Node[]=>[n,...n.children.flatMap(all)]
 let unmount:()=>void
+const listedDevice={id:'device-one',tenantId:'tenant-a',productId:'p',productName:'暖奶器',code:'D1',name:'设备一',modelVersion:'v1',lifecycle:'ACTIVE',credentialVersion:1,revision:0}
 function mount(product?:Product){
  const root=node('root'),app=renderer.createApp(DevicesView,{product})
- for(const tag of ['button','input','select','option','alert','skeleton','pagination','tag','table','table-column']) app.component(`el-${tag}`,defineComponent({setup:(_,ctx)=>()=>h(tag,ctx.attrs,ctx.slots.default?.())}))
+ for(const tag of ['button','input','select','option','alert','skeleton','pagination','tag','table']) app.component(`el-${tag}`,defineComponent({setup:(_,ctx)=>()=>h(tag,ctx.attrs,ctx.slots.default?.())}))
+ app.component('el-table-column',defineComponent({setup:(_,ctx)=>()=>h('column',ctx.attrs,ctx.slots.default?.({row:listedDevice}))}))
  app.component('el-dialog',defineComponent({props:['modelValue'],setup:(props,ctx)=>()=>props.modelValue?h('dialog',ctx.attrs,ctx.slots.default?.()):null}))
  app.mount(root);unmount=()=>app.unmount();return root
 }
@@ -40,6 +44,7 @@ async function settle(){for(let i=0;i<5;i++)await nextTick()}
 const product=(overrides:Partial<Product>={}):Product=>({id:'p',tenantId:'tenant-a',code:'warmer',name:'暖奶器',description:'',enabled:true,latestVersion:null,revision:0,draft:{properties:{},events:{},operations:{}},configuration:defaultProductConfiguration(),...overrides})
 
 beforeEach(()=>{
+ vi.mocked(deviceFirmwareApi.inventories).mockResolvedValue({})
  vi.clearAllMocks();context.session.account.platformAdmin=false;context.session.tenant.role='OWNER';context.session.can.mockReturnValue(true)
  vi.mocked(catalogApi.devices).mockResolvedValue({items:[],total:0,page:1,size:20})
  vi.mocked(catalogApi.models).mockResolvedValue([])
@@ -91,5 +96,84 @@ describe('device registration entry',()=>{
   expect(select.props.modelValue).toBe('')
   expect(all(root).find(n=>n.props['aria-label']==='登记模型版本')?.props.modelValue).toBe('')
   expect(button(root,'登记并生成凭证').props.disabled).toBe(true)
+ })
+})
+
+describe('device product filter',()=>{
+ const filter=(root:Node)=>all(root).find(n=>n.props['aria-label']==='按产品筛选')!
+ const pagination=(root:Node)=>all(root).find(n=>n.type==='pagination')!
+ it('combines product and keyword filtering, resets the page and retains the product on pagination and refresh',async()=>{
+  const root=mount();await settle()
+  pagination(root).props.onCurrentChange(3);await settle()
+  all(root).find(n=>n.props['aria-label']==='搜索设备')!.props['onUpdate:modelValue']('sensor')
+  filter(root).props['onUpdate:modelValue']('p');filter(root).props.onChange();await settle()
+  expect(catalogApi.devices).toHaveBeenLastCalledWith('/catalog/tenants/tenant-a','sensor',1,expect.any(AbortSignal),'p')
+  pagination(root).props.onCurrentChange(2);await settle()
+  button(root,'刷新').props.onClick();await settle()
+  expect(catalogApi.devices).toHaveBeenLastCalledWith('/catalog/tenants/tenant-a','sensor',2,expect.any(AbortSignal),'p')
+  filter(root).props['onUpdate:modelValue']('');filter(root).props.onChange();await settle()
+  expect(catalogApi.devices).toHaveBeenLastCalledWith('/catalog/tenants/tenant-a','sensor',1,expect.any(AbortSignal),'')
+ })
+ it('searches products remotely including disabled and unpublished products and retains the selected label',async()=>{
+  const disabled=product({enabled:false,latestVersion:null})
+  vi.mocked(catalogApi.products).mockResolvedValue({items:[disabled],total:1,page:1,size:20})
+  const root=mount();await settle()
+  filter(root).props.onVisibleChange(true);await settle()
+  expect(catalogApi.products).toHaveBeenLastCalledWith('/catalog/tenants/tenant-a','',1,expect.any(AbortSignal))
+  expect(all(filter(root)).some(n=>n.type==='option'&&n.props.value==='p')).toBe(true)
+  filter(root).props['onUpdate:modelValue']('p');filter(root).props.onChange();await settle()
+  vi.mocked(catalogApi.products).mockResolvedValue({items:[],total:0,page:1,size:20})
+  await filter(root).props['remote-method']('another product');await settle()
+  expect(catalogApi.products).toHaveBeenLastCalledWith('/catalog/tenants/tenant-a','another product',1,expect.any(AbortSignal))
+  expect(all(filter(root)).some(n=>n.type==='option'&&n.props.label==='暖奶器 · warmer')).toBe(true)
+ })
+ it('keeps the fixed product filter on a product detail page',async()=>{
+  const root=mount(product());await settle()
+  expect(filter(root)).toBeUndefined()
+  pagination(root).props.onCurrentChange(2);await settle()
+  expect(catalogApi.devices).toHaveBeenLastCalledWith('/catalog/tenants/tenant-a','',2,expect.any(AbortSignal),'p')
+  expect(catalogApi.products).not.toHaveBeenCalled()
+ })
+ it('ignores stale product searches and aborts the current search on unmount',async()=>{
+  const root=mount();await settle()
+  let resolveOld!:(value:any)=>void
+  vi.mocked(catalogApi.products).mockImplementationOnce(()=>new Promise(resolve=>{resolveOld=resolve}))
+  const old=filter(root).props['remote-method']('old')
+  const oldSignal=vi.mocked(catalogApi.products).mock.calls.at(-1)![3]
+  await filter(root).props['remote-method']('new');await settle()
+  expect(oldSignal.aborted).toBe(true)
+  resolveOld({items:[product({id:'stale'})],total:1,page:1,size:20});await old;await settle()
+  expect(all(filter(root)).some(n=>n.type==='option'&&n.props.value==='stale')).toBe(false)
+  const signal=vi.mocked(catalogApi.products).mock.calls.at(-1)![3]
+  unmount();expect(signal.aborted).toBe(true)
+ })
+ it('shows product loading failures and allows retrying by reopening the dropdown',async()=>{
+  vi.mocked(catalogApi.products).mockRejectedValueOnce(new Error('search unavailable'))
+  const root=mount();await settle()
+  await filter(root).props['remote-method']('');await settle()
+  expect(all(root).some(n=>n.type==='alert'&&n.props.title.includes('产品选项加载失败'))).toBe(true)
+  filter(root).props.onVisibleChange(true);await settle()
+  expect(all(root).some(n=>n.type==='alert'&&n.props.title.includes('产品选项加载失败'))).toBe(false)
+ })
+})
+describe('actual firmware list summary',()=>{
+ it('fetches one batch for the current page and renders real components separately from model version',async()=>{
+  vi.mocked(catalogApi.devices).mockResolvedValue({items:[listedDevice],total:1,page:1,size:20})
+  vi.mocked(deviceFirmwareApi.inventories).mockResolvedValue({'device-one':{revision:1,information:null,components:[{component:'main',version:'1.9.0',source:'ota.version.report',occurredAt:'2026-10-23T00:00:00Z',receivedAt:'2026-10-23T00:00:00Z',stale:false,beforeCurrentBoot:false}],checkedAt:'2026-10-23T00:00:00Z',maximumReportAgeSeconds:86400}})
+  const root=mount();await settle()
+  expect(deviceFirmwareApi.inventories).toHaveBeenCalledWith('/catalog/tenants/tenant-a',['device-one'],expect.any(AbortSignal))
+  expect(text(root)).toContain('main 1.9.0');expect(all(root).some(n=>n.props.label==='实际固件版本')).toBe(true)
+ })
+ it('does not confuse failed reads with unreported firmware and can retry independently',async()=>{
+  vi.mocked(catalogApi.devices).mockResolvedValue({items:[listedDevice],total:1,page:1,size:20})
+  vi.mocked(deviceFirmwareApi.inventories).mockRejectedValueOnce(new Error('failed')).mockResolvedValueOnce({})
+  const root=mount();await settle();expect(text(root)).toContain('固件读取失败');expect(text(root)).not.toContain('尚未上报')
+  button(root,'重试固件信息').props.onClick();await settle();expect(text(root)).toContain('尚未上报');expect(catalogApi.devices).toHaveBeenCalledTimes(1)
+ })
+ it('ignores a firmware response for a page that has already been replaced',async()=>{
+  vi.mocked(catalogApi.devices).mockResolvedValueOnce({items:[listedDevice],total:1,page:1,size:20}).mockResolvedValueOnce({items:[],total:0,page:1,size:20})
+  let resolve!:(value:any)=>void;vi.mocked(deviceFirmwareApi.inventories).mockImplementationOnce(()=>new Promise(done=>{resolve=done}))
+  const root=mount();await settle();button(root,'刷新').props.onClick();await settle()
+  resolve({'device-one':{components:[{component:'main',version:'outdated'}]}});await settle();expect(text(root)).not.toContain('outdated')
  })
 })

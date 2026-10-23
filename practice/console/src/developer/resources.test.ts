@@ -32,5 +32,6 @@ it('builds unique heading anchors and keeps trusted document links navigable',()
 })
 it('accepts only the known application login destination',()=>{
   expect(loginDestination('/developer/apps')).toBe('/developer/apps')
+  expect(loginDestination('/app')).toBe('/app')
   for(const target of ['https://other.test','//other.test','/platform/openapi',['/developer/apps'],undefined])expect(loginDestination(target)).toBe('/overview')
 })

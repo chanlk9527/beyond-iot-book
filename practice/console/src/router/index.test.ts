@@ -95,7 +95,7 @@ describe('page access guard', () => {
   })
   it('allows anonymous public documentation without contacting management APIs', async () => {
     state.session.authenticated=false; state.session.status='anonymous'
-    for (const path of ['developer','developer/docs/:slug?','developer/examples']) expect(await visit(path)).toBe(true)
+    for (const path of ['app','developer','developer/docs/:slug?','developer/examples']) expect(await visit(path)).toBe(true)
     expect(state.session.ensureSession).not.toHaveBeenCalled()
   })
   it('keeps public documentation available when the backend is unavailable', async () => {

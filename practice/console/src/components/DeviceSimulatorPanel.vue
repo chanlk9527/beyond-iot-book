@@ -14,7 +14,12 @@ const logs=ref<Trace[]>([]),pending=ref<Envelope[]>([]),values=ref<Record<string
 const replyDrafts=ref<Record<string,string>>({}),replyErrors=ref<Record<string,string>>({}),replySending=ref<Record<string,boolean>>({})
 const eventId=ref(''),eventValues=ref<Record<string,ShadowScalar>>({}),eventIncluded=ref<Record<string,boolean>>({})
 const intervalSeconds=ref(5),running=ref(false)
-const workspace=ref<'properties'|'events'|'downlinks'|'messages'>(props.embedded?'downlinks':'properties')
+const connectionNotice=ref(''),connectedAt=ref('')
+const workspace=ref<'properties'|'events'|'firmware'|'downlinks'|'messages'>(props.embedded?'downlinks':'properties')
+const firmwareReport=ref({mainVersion:'1.0.0',hardwareVersion:'HW-A',bootId:'sim-'+crypto.randomUUID(),versions:'{\n  "main": "1.0.0"\n}'})
+const firmwareAdvanced=ref(false),firmwareNotice=ref('')
+watch([()=>firmwareReport.value.mainVersion,()=>firmwareReport.value.hardwareVersion,()=>firmwareReport.value.bootId,()=>firmwareReport.value.versions,firmwareAdvanced],()=>{firmwareNotice.value=''})
+function newBootId(){firmwareReport.value.bootId='sim-'+crypto.randomUUID()}
 watch(status,state=>emit('connection-state',state),{immediate:true})
 watch(()=>props.focusMessageId,()=>{if(props.embedded)workspace.value='downlinks'})
 const propertyQuery=ref(''),propertyPage=ref(1),eventQuery=ref(''),eventPage=ref(1)
@@ -35,11 +40,16 @@ const model=computed(()=>props.detail.model.model)
 const fields=computed(()=>(Object.values(model.value.properties) as Field[]).filter(f=>f.access!=='WRITE_ONLY'))
 const events=computed(()=>Object.values(model.value.events) as ModelEvent[])
 const eventFields=computed(()=>Object.values(events.value.find(e=>e.id===eventId.value)?.fields||{}))
-const eligible=computed(()=>props.allowed&&props.detail.device.lifecycle==='ACTIVE'&&props.detail.product.enabled&&props.detail.product.configuration?.deviceType!=='CHILD')
+const connectionBlocker=computed(()=>!props.allowed?'当前账号缺少设备写入或凭证权限':props.detail.device.lifecycle!=='ACTIVE'?'设备未启用，请先在设备概览中启用':!props.detail.product.enabled?'所属产品已停用，请先启用产品':props.detail.product.configuration?.deviceType==='CHILD'?'网关子设备需通过网关接入，暂不支持直接模拟':'')
+const eligible=computed(()=>!connectionBlocker.value)
 const connected=computed(()=>status.value==='connected'&&eligible.value)
+const connectionTitle=computed(()=>connected.value?'设备已连接':status.value==='connecting'?'正在连接设备':connectionNotice.value?(connectionNotice.value.startsWith('连接未成功')?'连接未成功':'连接已断开'):'等待连接设备')
+const connectionHint=computed(()=>connected.value?'可以上报数据，或从平台端下发指令，在这里接收并应答。':status.value==='connecting'?'正在验证设备身份并建立 MQTT 连接，请稍候…':connectionBlocker.value||connectionNotice.value||(confirmed.value?'身份模拟已确认，点击「连接设备」开始调试。':'先确认下方模拟说明，再连接设备开始调试。'))
 let device=new SimulatedDevice(model.value,props.detail.device.modelVersion)
 const client=new SimulatorClient(row=>{if(!disposed){logs.value.unshift(row);logs.value.length=Math.min(logs.value.length,200)}},state=>{
  if(disposed)return
+ if(state==='connected'){connectedAt.value=new Date().toLocaleTimeString();connectionNotice.value=''}
+ if(state==='disconnected'&&status.value!=='disconnected'){connectionNotice.value=status.value==='connecting'?'连接未成功，请检查接入服务或在消息时间线查看原因。':'设备连接已中断，请重新连接后继续调试。';connectedAt.value=''}
  status.value=state
  if(state==='disconnected'){stopTimer();pending.value=[];replyDrafts.value={};replyErrors.value={}}
 },message=>{
@@ -57,16 +67,16 @@ watch(()=>[props.detail.device.id,props.detail.device.credentialVersion,eligible
 async function connect(){
  if(!eligible.value||!confirmed.value||status.value!=='disconnected')return
  const current=++attempt
- status.value='connecting';error.value=''
+ status.value='connecting';error.value='';connectionNotice.value=''
  try{
   const credential=await catalogApi.credential(props.scope,props.detail.device,life.signal)
   if(disposed||current!==attempt)return
   device=new SimulatedDevice(model.value,props.detail.device.modelVersion)
   client.start(endpoint,credential)
- }catch(e){if(current===attempt&&!disposed){status.value='disconnected';if(!isCancelled(e))error.value=errorMessage(e)}}
+ }catch(e){if(current===attempt&&!disposed){status.value='disconnected';if(!isCancelled(e))connectionNotice.value='连接未成功：'+errorMessage(e)}}
 }
 function stopTimer(){if(timer)clearTimeout(timer);timer=undefined;running.value=false}
-function disconnect(){attempt++;stopTimer();client.stop();status.value='disconnected';pending.value=[];replyDrafts.value={};replyErrors.value={}}
+function disconnect(){attempt++;stopTimer();client.stop();status.value='disconnected';connectionNotice.value='';connectedAt.value='';pending.value=[];replyDrafts.value={};replyErrors.value={}}
 function fillReply(message:Envelope,success:boolean){
  try{const reply=device.preview(message,success);replyDrafts.value[message.messageId]=JSON.stringify({result:reply.result,data:reply.data},null,2);delete replyErrors.value[message.messageId]}
  catch(e){replyErrors.value[message.messageId]=errorMessage(e)}
@@ -105,6 +115,24 @@ async function reportEvent(){
   await client.publish(envelope('thing.event.report',{eventId:eventId.value,fields}))
  }catch(e){if(!disposed)error.value=errorMessage(e)}finally{busy.value=false}
 }
+async function reportFirmware(){
+ if(!connected.value||busy.value)return
+ busy.value=true;error.value='';firmwareNotice.value=''
+ try{
+  const form=firmwareReport.value
+  const validText=(value:unknown,max:number)=>typeof value==='string'&&value.length>0&&value.length<=max&&value.trim()===value&&!/[\u0000-\u001f\u007f]/.test(value)
+  if(!validText(form.mainVersion,100)||!validText(form.hardwareVersion,100)||!validText(form.bootId,128))throw Error('请填写有效的主模块版本、硬件版本和启动标识')
+  let versions:Record<string,unknown>
+  try{versions=firmwareAdvanced.value?JSON.parse(form.versions):{main:form.mainVersion}}catch{throw Error('组件版本 JSON 格式无效')}
+  if(!versions||typeof versions!=='object'||Array.isArray(versions)||Object.keys(versions).length<1||Object.keys(versions).length>16)throw Error('组件版本须为包含1～16项的对象')
+  for(const [component,version] of Object.entries(versions))if(!/^[a-z][a-z0-9_]{0,63}$/.test(component)||!validText(version,100))throw Error('组件标识或版本无效')
+  if(firmwareAdvanced.value&&Object.hasOwn(versions,'main')&&versions.main!==form.mainVersion)throw Error('组件 JSON 中的 main 必须与主模块固件版本一致')
+  await client.publish(envelope('thing.info.report',{firmwareVersion:form.mainVersion,hardwareVersion:form.hardwareVersion,bootId:form.bootId,sdkVersion:'browser-simulator',clockSynced:true}))
+  firmwareNotice.value='设备信息已获 MQTT 接收确认，正在上报组件版本…'
+  await client.publish(envelope('ota.version.report',{versions}))
+  firmwareNotice.value='设备与组件报告均已获 MQTT 接收确认。业务入库可能稍有延迟，请在设备概览或固件与升级页刷新查看。'
+ }catch(e){if(!disposed){firmwareNotice.value=firmwareNotice.value?'设备信息已发送，组件报告未确认，请重试完整上报。':'';error.value=errorMessage(e)}}finally{busy.value=false}
+}
 async function respond(message:Envelope,success:boolean,edited=false){
  if(!connected.value||replySending.value[message.messageId])return
  replySending.value[message.messageId]=true
@@ -133,17 +161,25 @@ onScopeDispose(()=>{disposed=true;life.abort();disconnect()})
 
 <template>
  <div class="simulator" :class="{embedded}">
-  <div class="section-heading"><div><p class="eyebrow">MQTT DEVICE SIMULATOR</p><h2>{{embedded?'模拟设备端':'设备模拟'}}</h2><p>{{embedded?'下行会在这里显示，可直接应答。':'在浏览器中模拟当前设备，验证真实接入、数据上报与控制应答。'}}</p></div><el-tag :type="connected?'success':status==='connecting'?'warning':'info'">{{connected?'已连接':status==='connecting'?'连接中':'未连接'}}</el-tag></div>
-  <el-alert v-if="!eligible" title="需要设备写入及凭证权限，并启用设备与产品。子设备请通过网关接入，暂不支持直接模拟。" type="info" :closable="false"/>
+  <div class="section-heading"><div><p class="eyebrow">MQTT DEVICE SIMULATOR</p><h2>{{embedded?'模拟设备端':'设备模拟'}}</h2><p>{{embedded?'接收平台指令，模拟设备上报与应答。':'在浏览器中模拟当前设备，验证真实接入、数据上报与控制应答。'}}</p></div></div>
   <el-alert v-if="presence==='ONLINE'&&status==='disconnected'" title="当前设备在线：使用相同身份连接将替换现有连接，请优先使用测试设备。" type="warning" :closable="false"/>
-  <div class="connection-card"><div><span class="muted">WebSocket 地址</span><code>{{endpoint}}</code></div><div><span class="muted">绑定模型</span><strong>{{detail.device.modelVersion}}</strong></div><div class="connection-actions"><el-button type="primary" :disabled="!eligible||!confirmed||status!=='disconnected'" @click="connect">连接设备</el-button><el-button :disabled="status==='disconnected'" @click="disconnect">断开连接</el-button></div></div>
-  <el-checkbox v-model="confirmed" :disabled="status!=='disconnected'">我确认使用此设备身份进行模拟，上报将写入真实业务链路。</el-checkbox>
-  <p class="muted">切换本页页签可继续模拟；离开设备详情会断开连接。连接失败时请检查 WebSocket 接入与代理配置。</p>
+  <section class="sim-connection" :class="{'is-connected':connected,'is-connecting':status==='connecting','is-interrupted':!!connectionNotice&&status==='disconnected'}" aria-label="模拟设备连接">
+   <div class="connection-summary">
+    <div class="connection-symbol" aria-hidden="true"><svg v-if="connected" viewBox="0 0 24 24" fill="none"><path d="m5 12 4 4L19 6"/></svg><span v-else-if="status==='connecting'" class="connection-spinner"/><svg v-else viewBox="0 0 24 24" fill="none"><path d="M12 3v9M6.3 5.8a8 8 0 1 0 11.4 0"/></svg></div>
+    <div class="connection-copy" role="status" aria-live="polite" aria-atomic="true"><strong>{{connectionTitle}}</strong><p>{{connectionHint}}</p></div>
+    <div class="connection-actions"><el-button v-if="!connected" type="primary" :loading="status==='connecting'" :disabled="!eligible||!confirmed||status!=='disconnected'" @click="connect">{{status==='connecting'?'连接中…':'连接设备'}}</el-button><el-button v-if="status!=='disconnected'" :type="connected?'success':undefined" plain @click="disconnect">断开连接</el-button></div>
+   </div>
+   <div v-if="connected" class="connection-established"><span class="connection-dot"/>MQTT 5 会话已建立<span class="connection-time">{{connectedAt}} 连接成功</span></div>
+   <div class="connection-meta"><span>绑定模型 <b>{{detail.device.modelVersion}}</b></span><details><summary>连接地址</summary><code>{{endpoint}}</code></details></div>
+   <div v-if="status==='disconnected'" class="connection-consent"><el-checkbox v-model="confirmed">我确认使用此设备身份进行模拟</el-checkbox><p>上报将写入真实业务数据，请使用测试设备。</p></div>
+  </section>
+  <p class="connection-footnote">切换本页页签保持连接 · 离开设备详情自动断开</p>
   <el-alert v-if="error" :title="error" type="error" :closable="false"/>
   <div v-if="embedded" class="reply-mode"><el-checkbox v-model="autoReply">自动模拟成功应答</el-checkbox><span>{{autoReply?'自动应答':'手动应答'}}</span></div>
   <nav class="simulator-navigation" aria-label="模拟工作区">
    <button type="button" :aria-pressed="workspace==='properties'" @click="workspace='properties'">属性上报 <span>{{fields.length}}</span><small v-if="running">定时运行中</small></button>
    <button type="button" :aria-pressed="workspace==='events'" @click="workspace='events'">事件上报 <span>{{events.length}}</span></button>
+   <button type="button" :aria-pressed="workspace==='firmware'" @click="workspace='firmware'">固件信息上报</button>
    <button type="button" :aria-pressed="workspace==='downlinks'" :class="{'has-pending':pending.length>0}" @click="workspace='downlinks'">下行处理 <span aria-live="polite">{{pending.length}} 待处理</span></button>
    <button type="button" :aria-pressed="workspace==='messages'" @click="workspace='messages'">消息时间线 <span>{{logs.length}}</span></button>
   </nav>
@@ -167,6 +203,7 @@ onScopeDispose(()=>{disposed=true;life.abort();disconnect()})
      <el-button type="primary" :disabled="!connected||busy" @click="reportEvent">上报事件</el-button>
     </template><p v-else class="muted">当前绑定模型没有定义事件。</p>
    </section>
+   <section v-show="workspace==='firmware'" class="simulation-section"><h3>固件信息上报</h3><p class="muted">通过真实 MQTT 链路上报测试信息，更新当前设备的实际固件记录。仅 MQTT 重连保持启动标识不变；模拟重启时生成新标识。组件版本 JSON 每次发送完整快照。</p><div class="simulation-field"><label>主模块固件版本</label><el-input v-model="firmwareReport.mainVersion" aria-label="模拟主模块固件版本" maxlength="100" :disabled="busy"/></div><div class="simulation-field"><label>实际硬件版本</label><el-input v-model="firmwareReport.hardwareVersion" aria-label="模拟硬件版本" maxlength="100" :disabled="busy"/></div><div class="simulation-field"><label>启动标识</label><el-input v-model="firmwareReport.bootId" aria-label="模拟启动标识" maxlength="128" :disabled="busy"/></div><el-button :disabled="busy" @click="newBootId">生成模拟重启标识</el-button><p class="muted">快速上报：填写主模块版本和硬件版本即可，组件 main 自动使用同一版本。默认值是测试示例，请按测试场景修改。</p><el-checkbox v-model="firmwareAdvanced" :disabled="busy">高级：上报完整多组件快照</el-checkbox><p v-if="!firmwareAdvanced" class="muted">当前将上报 main {{firmwareReport.mainVersion}}；此模式会用单组件快照替换已有 OTA 组件清单。</p><div v-if="firmwareAdvanced" class="simulation-field"><label>组件版本 JSON</label><el-input v-model="firmwareReport.versions" aria-label="模拟组件版本 JSON" type="textarea" :rows="6" maxlength="4096" :disabled="busy"/></div><el-button type="primary" :disabled="!connected||busy" @click="reportFirmware">上报设备与组件固件信息</el-button><p v-if="firmwareNotice" role="status">{{firmwareNotice}}</p><p class="muted">此操作不下载、安装或验证真实固件。上报后可到“固件与升级”页刷新并检查兼容性。</p></section>
   <section v-show="workspace==='downlinks'" class="simulation-section"><div class="section-heading"><h3>下行处理 <span class="muted">{{pending.length}} 条待处理</span></h3><el-checkbox v-if="!embedded" v-model="autoReply">自动模拟成功应答</el-checkbox></div><p class="muted">属性写入成功后更新模拟值并上报；操作成功仅表示模拟执行，不推断硬件行为。可在平台端控制区发起下发。</p>
    <div class="workspace-scroll downlink-scroll">
    <p v-if="!pending.length" class="muted">等待平台下发属性或操作。</p>
@@ -188,6 +225,7 @@ onScopeDispose(()=>{disposed=true;life.abort();disconnect()})
  </div>
 </template>
 <style scoped>
+.sim-connection{--connection-color:var(--text-secondary);--connection-fill:var(--surface-secondary);margin:20px 0 10px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);transition:border-color .2s,background-color .2s}.sim-connection.is-connected{--connection-color:var(--el-color-success-dark-2);--connection-fill:var(--el-color-success-light-9);border-color:var(--el-color-success-light-5);background:var(--el-color-success-light-9)}.sim-connection.is-connecting{--connection-color:var(--el-color-primary);--connection-fill:var(--el-color-primary-light-9);border-color:var(--el-color-primary-light-5)}.sim-connection.is-interrupted{--connection-color:var(--el-color-warning-dark-2);--connection-fill:var(--el-color-warning-light-9);border-color:var(--el-color-warning-light-5)}.connection-summary{display:flex;align-items:flex-start;gap:12px;padding:18px;flex-wrap:wrap}.connection-symbol{display:flex;align-items:center;justify-content:center;flex:0 0 40px;width:40px;height:40px;border-radius:50%;color:var(--connection-color);background:var(--connection-fill);border:1px solid currentColor}.connection-symbol svg{width:22px;height:22px;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.connection-copy{flex:1;min-width:150px}.connection-copy>strong{display:block;color:var(--connection-color);font-size:16px;line-height:1.5}.simulator .connection-copy>p{margin:5px 0 0;color:var(--text-secondary);font-size:12px;line-height:1.7}.sim-connection .connection-actions{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 0 auto}.sim-connection .connection-actions .el-button+.el-button{margin-left:0}.connection-established{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:0 18px 14px;color:var(--connection-color);font-size:12px;font-weight:500}.connection-dot{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px var(--el-color-success-light-8)}.connection-time{margin-left:auto;font-weight:400;font-variant-numeric:tabular-nums}.connection-meta{display:flex;align-items:baseline;flex-wrap:wrap;gap:12px 20px;padding:12px 18px;border-top:1px solid var(--line);font-size:12px;color:var(--text-secondary)}.connection-meta b{margin-left:6px;color:var(--text-primary);font-weight:600}.connection-meta details{min-width:0;flex:1}.connection-meta summary{cursor:pointer;width:fit-content}.connection-meta code{display:block;margin-top:8px;overflow-wrap:anywhere;font-size:11px}.connection-consent{border-top:1px solid var(--line);padding:12px 18px;background:var(--surface-secondary)}.simulator .connection-consent .el-checkbox{font-size:12px}.connection-consent :deep(.el-checkbox__label){font-size:12px}.simulator .connection-consent p{margin:4px 0 0 22px;font-size:12px;color:var(--text-secondary);line-height:1.6}.simulator .connection-footnote{font-size:11px;color:var(--text-secondary);margin:8px 0 12px}.connection-spinner{width:19px;height:19px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:connection-spin .8s linear infinite}@keyframes connection-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.connection-spinner{animation:none}.sim-connection{transition:none}}@media(max-width:600px){.connection-summary{padding:14px}.sim-connection .connection-actions{width:100%;margin:0 0 0 52px}.connection-meta,.connection-consent{padding:12px 14px}.connection-established{padding:0 14px 14px}.connection-time{margin-left:15px}}
 .reply-editor-heading{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:14px}.reply-editor-heading strong{font-size:13px}.reply-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.reply-actions .el-button+.el-button{margin-left:0}.reply-error{color:var(--el-color-danger)}.original-downlink summary{font-size:12px;color:var(--text-secondary);cursor:pointer}.pending-message :deep(textarea){font-family:Consolas,monospace;font-size:12px;line-height:1.6}
 .reply-mode{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 0}.reply-mode>span{font-size:11px;color:var(--text-secondary)}.focused-message{border:1px solid var(--el-color-primary-light-5);border-radius:8px;padding:12px;background:var(--el-color-primary-light-9)}.embedded .connection-card{padding:12px;gap:12px;margin-top:12px}.embedded .connection-actions{margin-left:0}.embedded .simulation-section{padding:14px}.embedded .simulator-navigation{position:static}.embedded .simulator-navigation button{padding:8px;font-size:12px}.embedded .simulation-field{grid-template-columns:1fr}.embedded .section-heading .eyebrow{display:none}.embedded .downlink-scroll{max-height:340px}.embedded .workspace-scroll{max-height:340px}
 .simulator-navigation{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px;padding:12px 0;background:var(--surface);border-bottom:1px solid var(--line);margin-top:12px}.simulator-navigation button{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:8px;padding:10px 14px;background:var(--surface-secondary);color:var(--text-primary);cursor:pointer;font:inherit;font-size:13px}.simulator-navigation button[aria-pressed=true]{border-color:var(--el-color-primary);color:var(--el-color-primary);background:var(--el-color-primary-light-9)}.simulator-navigation span{font-size:11px}.simulator-navigation small{color:var(--el-color-success);font-size:10px}.simulator-navigation .has-pending span{background:var(--el-color-warning-light-9);color:var(--el-color-warning-dark-2);padding:3px 6px;border-radius:5px}.downlink-notice{padding:10px 14px;background:var(--el-color-warning-light-9);border-radius:8px}.workspace-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:16px 0}.workspace-toolbar>.el-input{max-width:360px}.workspace-scroll{max-height:420px;overflow:auto;padding-right:8px;overscroll-behavior:contain}.workspace-pagination{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:14px 0;border-top:1px solid var(--line);font-size:12px;color:var(--text-secondary)}.simulator-workspace .simulation-section{margin-top:12px}.downlink-scroll{max-height:500px}.simulator-navigation button:focus-visible{outline:2px solid var(--el-color-primary);outline-offset:2px}@media(max-width:600px){.simulator-navigation button{padding:9px;flex:1 1 40%;justify-content:space-between}.workspace-scroll{max-height:340px}.workspace-toolbar>.el-input{max-width:none}}

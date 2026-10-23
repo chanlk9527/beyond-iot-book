@@ -1,6 +1,6 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import { ElForm, ElFormItem, ElCheckboxGroup, ElDescriptions, ElDescriptionsItem, ElCascader, ElDivider, ElTree, ElTabs, ElTabPane, ElInputNumber, ElCheckbox, ElRadioGroup, ElRadioButton, ElDialog, ElSwitch, ElTable, ElTableColumn, ElPagination, ElAlert, ElButton, ElConfigProvider, ElInput, ElOption, ElSelect, ElSkeleton, ElTag } from 'element-plus'
+import { ElDrawer, ElDropdown, ElDropdownMenu, ElDropdownItem, ElForm, ElFormItem, ElCheckboxGroup, ElDescriptions, ElDescriptionsItem, ElCascader, ElDivider, ElTree, ElTabs, ElTabPane, ElInputNumber, ElCheckbox, ElRadioGroup, ElRadioButton, ElDialog, ElSwitch, ElTable, ElTableColumn, ElPagination, ElAlert, ElButton, ElConfigProvider, ElInput, ElOption, ElSelect, ElSkeleton, ElTag } from 'element-plus'
 import 'element-plus/dist/index.css'
 import './styles/main.css'
 import App from './App.vue'
@@ -15,5 +15,5 @@ setUnauthorizedHandler(() => {
   if (router.currentRoute.value.name !== 'login' && !router.currentRoute.value.meta.public) void router.replace({ name: 'login' })
 })
 app.use(router)
-for (const component of [ElForm, ElFormItem, ElCheckboxGroup, ElDescriptions, ElDescriptionsItem, ElCascader, ElDivider, ElTree, ElTabs, ElTabPane, ElInputNumber, ElCheckbox, ElRadioGroup, ElRadioButton, ElDialog, ElSwitch, ElTable, ElTableColumn, ElPagination, ElAlert, ElButton, ElConfigProvider, ElInput, ElOption, ElSelect, ElSkeleton, ElTag]) app.use(component)
+for (const component of [ElDrawer, ElDropdown, ElDropdownMenu, ElDropdownItem, ElForm, ElFormItem, ElCheckboxGroup, ElDescriptions, ElDescriptionsItem, ElCascader, ElDivider, ElTree, ElTabs, ElTabPane, ElInputNumber, ElCheckbox, ElRadioGroup, ElRadioButton, ElDialog, ElSwitch, ElTable, ElTableColumn, ElPagination, ElAlert, ElButton, ElConfigProvider, ElInput, ElOption, ElSelect, ElSkeleton, ElTag]) app.use(component)
 app.mount('#app')

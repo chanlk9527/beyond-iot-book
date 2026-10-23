@@ -21,9 +21,9 @@ export function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : '请求失败，请稍后重试。'
 }
 
-export async function request<T>(path: string, options: RequestInit = {}, notifyUnauthorized = true): Promise<T> {
+export async function request<T>(path: string, options: RequestInit = {}, notifyUnauthorized = true, timeoutMs = 15_000): Promise<T> {
   const currentScope = scope
-  const signals = [currentScope.signal, AbortSignal.timeout(15_000)]
+  const signals = [currentScope.signal, AbortSignal.timeout(timeoutMs)]
   if (options.signal) signals.push(options.signal)
   let response: Response
   try {
@@ -50,6 +50,9 @@ export async function request<T>(path: string, options: RequestInit = {}, notify
       404: '请求的资源不存在。',
       429: '操作过于频繁，请稍后重试。',
       422: '当前存储方案不支持所选记录方式、保留周期或聚合策略，请检查数据策略设置。',
+      413: '文件超过允许上传大小。',
+      502: '文件存储暂时不可用，请稍后重试。',
+      503: '服务尚未启用或暂时不可用，请检查服务配置。',
     }
     throw new ApiError(response.status, messages[response.status] || '服务暂时不可用，请稍后重试。')
   }
@@ -89,4 +92,9 @@ export async function managementMutation<T>(path: string, method: 'POST' | 'PUT'
     headers: { [csrf.headerName]: csrf.token, 'Content-Type': 'application/json' },
     body: JSON.stringify(value),
   })
+}
+
+export async function managementUpload<T>(path: string, body: FormData, signal?: AbortSignal): Promise<T> {
+  const csrf = await request<CsrfToken>('/auth/csrf', { signal })
+  return request<T>(path, { method:'POST', signal, headers:{[csrf.headerName]:csrf.token}, body }, true, 300_000)
 }

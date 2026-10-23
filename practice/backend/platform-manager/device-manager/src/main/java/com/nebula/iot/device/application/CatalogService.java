@@ -107,6 +107,7 @@ public class CatalogService {
   if(row.enabled())conflict("Disable the product before deleting it");
   if(data.deviceCount(scope,"",id)>0)conflict("Product has devices and cannot be deleted");
   if(data.productionBatches(id)>0)conflict("Product has production batches and cannot be deleted");
+  if(data.firmwareChannels(id)>0)conflict("Product has firmware channels and must be retained for traceability");
   data.deleteModels(id);
   if(data.deleteProduct(scope,id,revision)!=1)conflict("Product changed; refresh and retry");
   audit(actor,scope,"PRODUCT_DELETED",id);

@@ -2,7 +2,7 @@ import { onScopeDispose, watch, type WatchSource } from 'vue'
 import { managementMutation, request, ApiError } from '../api/management'
 
 export interface DeviceResource { tenantId:string|null; deviceId:string }
-export interface DeviceNotice { type:'invalidate'|'resync'|'disconnected'; kind?:'shadow'|'presence'; deviceId?:string; tenantId?:string }
+export interface DeviceNotice { type:'invalidate'|'resync'|'disconnected'|'denied'; kind?:'shadow'|'presence'; deviceId?:string; tenantId?:string }
 interface Listener { resources:DeviceResource[]; receive:(notice:DeviceNotice)=>void }
 const listeners = new Set<Listener>()
 let socket:WebSocket|undefined, retry:ReturnType<typeof setTimeout>|undefined, watchdog:ReturnType<typeof setTimeout>|undefined
@@ -64,7 +64,10 @@ async function connect() {
   } catch(error) {
     if(signal.aborted)return
     // A denied subscription needs a permission/session change, not an endless retry loop.
-    if(error instanceof ApiError&&[400,401,403,404].includes(error.status))return
+    if(error instanceof ApiError&&[400,401,403,404].includes(error.status)){
+      for(const listener of listeners)listener.receive({type:'denied'})
+      return
+    }
     reconnect()
   }
 }
@@ -72,7 +75,7 @@ async function connect() {
 export function useDeviceSubscription(resources:WatchSource<DeviceResource[]>, receive:(notice:DeviceNotice)=>void) {
   const listener:Listener={resources:[],receive}
   listeners.add(listener)
-  watch(resources,value=>{listener.resources=value;schedule()},{immediate:true,deep:true})
+  watch(resources,value=>{listeners.add(listener);listener.resources=value;schedule()},{immediate:true,deep:true})
   onScopeDispose(()=>{listeners.delete(listener);schedule()})
 }
 export function closeDeviceSubscriptions() { listeners.clear();stop() }

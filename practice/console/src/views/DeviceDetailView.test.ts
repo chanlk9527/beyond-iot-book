@@ -2,6 +2,8 @@
 import {afterEach,beforeEach,expect,it,vi} from 'vitest'
 import {createApp,defineComponent,h,nextTick} from 'vue'
 import DeviceDetailView from './DeviceDetailView.vue'
+import {deviceFirmwareApi} from '../api/deviceFirmware'
+vi.mock('../api/deviceFirmware',()=>({deviceFirmwareApi:{inventory:vi.fn()}}))
 import {catalogApi,defaultProductConfiguration,type DeviceDetail,type ModelSpec} from '../api/catalog'
 const context=vi.hoisted(()=>({push:vi.fn(),can:vi.fn(()=>true)}))
 vi.mock('../realtime/deviceSubscription',()=>({useDeviceSubscription:vi.fn(),readPresence:vi.fn(async()=>({state:'UNKNOWN'}))}))
@@ -13,6 +15,7 @@ vi.mock('../components/CatalogNavigation.vue',()=>({default:defineComponent(()=>
 vi.mock('../components/DeviceDebugPanel.vue',()=>({default:defineComponent({setup:()=>()=>h('div',{'data-debug':true},'统一设备调试')})}))
 vi.mock('../components/DeviceShadowPanel.vue',()=>({default:defineComponent({props:['model'],setup:p=>()=>h('div',{'data-state':true},JSON.stringify(p.model))})}))
 vi.mock('../components/DeviceHistoryPanel.vue',()=>({default:defineComponent({props:{initialKind:String,eventOnly:Boolean},setup:p=>()=>h('div',{'data-history':p.initialKind||'PROPERTY','data-events-only':!!p.eventOnly},'真实历史查询')})}))
+vi.mock('../components/DeviceFirmwarePanel.vue',()=>({default:defineComponent({props:['scope','device'],setup:p=>()=>h('div',{'data-firmware':true},p.scope+' '+p.device.id)})}))
 const empty=():ModelSpec=>({properties:{},events:{},operations:{}})
 const model=():ModelSpec=>({properties:{nightLight:{id:'nightLight',schema:{type:'BOOLEAN'},access:'READ_WRITE'}},events:{alert:{id:'alert',fields:{message:{id:'message',schema:{type:'TEXT'},required:true}}}},operations:{reboot:{id:'reboot',inputs:{}}}})
 function detail(bound=model(),draft=bound):DeviceDetail{return {
@@ -32,7 +35,7 @@ function mount(){
  app.mount(root);dispose=()=>{app.unmount();root.remove()};return root
 }
 async function tab(root:HTMLElement,name:string){(root.querySelector('[data-tab="'+name+'"]') as HTMLButtonElement).click();await settle()}
-beforeEach(()=>{vi.clearAllMocks();context.can.mockReturnValue(true);vi.mocked(catalogApi.detail).mockResolvedValue(detail());vi.mocked(catalogApi.runtime).mockResolvedValue({properties:[],events:[]})})
+beforeEach(()=>{vi.clearAllMocks();vi.mocked(deviceFirmwareApi.inventory).mockResolvedValue({revision:0,information:null,components:[],checkedAt:'2026-10-23T00:00:00Z',maximumReportAgeSeconds:86400});context.can.mockReturnValue(true);vi.mocked(catalogApi.detail).mockResolvedValue(detail());vi.mocked(catalogApi.runtime).mockResolvedValue({properties:[],events:[]})})
 afterEach(()=>dispose?.())
 it('has one device-state tab using the bound model and does not fetch the redundant property snapshot',async()=>{
  const root=mount();await settle()
@@ -68,6 +71,15 @@ it('routes event records to the actual history panel instead of the model placeh
  await tab(root,'capability')
  expect(root.textContent).toContain('nightLight')
  expect(root.textContent).not.toContain('设备详情加载失败')
+})
+it('opens firmware inventory for the actual tenant scope from the aggregate device page',async()=>{
+ const root=mount();await settle();await tab(root,'firmware')
+ expect(root.querySelector('[data-firmware]')?.textContent).toContain('/catalog/tenants/ta')
+})
+it('shows real firmware in overview and refreshes it after returning from device debugging',async()=>{
+ vi.mocked(deviceFirmwareApi.inventory).mockResolvedValue({revision:1,information:null,components:[{component:'main',version:'1.9.0',source:'thing.info.report',occurredAt:'2026-10-23T00:00:00Z',receivedAt:'2026-10-23T00:00:00Z',stale:false,beforeCurrentBoot:false}],checkedAt:'2026-10-23T00:00:00Z',maximumReportAgeSeconds:86400})
+ const root=mount();await settle();expect(root.textContent).toContain('main 1.9.0');expect(root.textContent).toContain('实际固件版本')
+ await tab(root,'debug');await tab(root,'overview');expect(deviceFirmwareApi.inventory).toHaveBeenCalledTimes(2)
 })
 it('explains a newer published version without telling the user to publish it again',async()=>{
  const data=detail(empty(),model());data.product.latestVersion='v2'

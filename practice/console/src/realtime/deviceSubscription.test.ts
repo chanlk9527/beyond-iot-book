@@ -46,6 +46,13 @@ it('replaces resources on navigation and cancels a pending ticket on disposal',a
  closeDeviceSubscriptions();await tick();expect(Socket.instances[1]!.close).toHaveBeenCalled()
 })
 it('stops automatic retry when subscription authorization is denied',async()=>{
- vi.mocked(managementMutation).mockRejectedValue(new ApiError(403,'denied'));subscribe();await tick()
+ vi.mocked(managementMutation).mockRejectedValue(new ApiError(403,'denied'));const {receive}=subscribe();await tick()
+ expect(receive).toHaveBeenLastCalledWith({type:'denied'})
  await vi.advanceTimersByTimeAsync(60000);expect(managementMutation).toHaveBeenCalledTimes(1);expect(Socket.instances).toHaveLength(0)
+})
+it('can subscribe again after login clears the previous session connections',async()=>{
+ const {resources,receive}=subscribe();await tick();closeDeviceSubscriptions()
+ resources.value=[];await tick();resources.value=[{tenantId:'ta',deviceId:'d2'}];await tick()
+ expect(managementMutation).toHaveBeenLastCalledWith('/realtime/tickets','POST',{devices:[{tenantId:'ta',deviceId:'d2'}]},expect.any(AbortSignal))
+ Socket.instances.at(-1)!.message({type:'ready'});expect(receive).toHaveBeenLastCalledWith({type:'resync'})
 })

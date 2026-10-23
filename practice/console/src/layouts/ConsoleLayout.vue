@@ -35,6 +35,8 @@ function navigate(path: string) { menuOpen.value = false; void router.push(path)
         <div class="nav-caption">工作台</div>
         <button class="nav-item" :class="{ active: route.name === 'overview' }" :aria-current="route.name === 'overview' ? 'page' : undefined" @click="navigate('/overview')"><AppIcon name="grid" />控制台概览</button>
         <template v-if="session.account?.platformAdmin">
+          <div class="nav-caption roadmap-caption">规则与集成 <span style="font-size:9px;opacity:.65">预览</span></div>
+          <button v-for="item in [{key:'flows',name:'数据流转',icon:'workflow'},{key:'scenes',name:'场景自动化',icon:'layers'},{key:'connections',name:'连接管理',icon:'connection'},{key:'notifications',name:'通知管理',icon:'bell'},{key:'runs',name:'运行记录',icon:'clock'}]" :key="item.key" class="nav-item" :class="{active:route.meta.automationSection===item.key}" :aria-current="route.meta.automationSection===item.key ? 'page' : undefined" @click="navigate(`/automation/${item.key}`)"><AppIcon :name="item.icon"/>{{ item.name }}</button>
           <div class="nav-caption roadmap-caption">接入运维</div>
           <button class="nav-item" :class="{active:route.name==='access-nodes'}" :aria-current="route.name==='access-nodes' ? 'page' : undefined" @click="navigate('/platform/access-nodes')"><AppIcon name="connection"/>设备接入</button>
           <button class="nav-item" :class="{active:route.name==='eventbus'}" :aria-current="route.name==='eventbus' ? 'page' : undefined" @click="navigate('/platform/eventbus')"><AppIcon name="connection"/>事件总线</button>

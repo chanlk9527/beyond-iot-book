@@ -9,6 +9,7 @@ public interface CatalogRepository {
  int unbindChild(String scope,String gatewayId,String childId);
  ConnectionRow connection(String id);
  long productionBatches(String productId);
+ long firmwareChannels(String productId);
  long productionItems(String deviceId);
  DirectoryRow directory(String scope);
  int insertDirectory(String scope,String tree);

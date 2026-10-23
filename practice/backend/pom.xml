@@ -28,6 +28,7 @@
     </properties>
     <dependencyManagement>
         <dependencies>
+            <dependency><groupId>com.nebula.iot</groupId><artifactId>file-component</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>com.nebula.iot</groupId><artifactId>storage-component</artifactId><version>${project.version}</version></dependency>
             <dependency><groupId>software.amazon.awssdk</groupId><artifactId>bom</artifactId><version>${aws-sdk.version}</version><type>pom</type><scope>import</scope></dependency>
             <dependency><groupId>com.nebula.iot</groupId><artifactId>media-component</artifactId><version>${project.version}</version></dependency>

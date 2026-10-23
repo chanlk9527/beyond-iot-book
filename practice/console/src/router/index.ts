@@ -6,6 +6,7 @@ import { loginDestination } from '../security/loginDestination'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
+    { path: '/app', name: 'consumer-app', component: () => import('../views/ConsumerAppView.vue'), meta: { title: '星云宝宝 · App 体验', public: true } },
     { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { title: '登录' } },
     { path: '/developer', component: () => import('../layouts/DeveloperLayout.vue'), children: [
       { path: '', name: 'developer-home', component: () => import('../views/DeveloperHomeView.vue'), meta: {title:'开发者中心',public:true} },
@@ -16,6 +17,11 @@ const router = createRouter({
     { path: '/', component: () => import('../layouts/ConsoleLayout.vue'), children: [
       { path: '', redirect: '/overview' },
       { path: 'overview', name: 'overview', component: () => import('../views/OverviewView.vue'), meta: { title: '控制台概览' } },
+      { path: 'automation', redirect: '/automation/flows' },
+      ...[
+        ['flows', '数据流转'], ['scenes', '场景自动化'], ['connections', '连接管理'],
+        ['notifications', '通知管理'], ['runs', '运行记录'],
+      ].map(([section, title]) => ({ path: `automation/${section}`, name: `automation-${section}`, component: () => import('../views/AutomationPreviewView.vue'), meta: { title, automationSection: section, platformAdminOnly: true } })),
       { path: 'platform/openapi', name: 'openapi-management', component: () => import('../views/DeveloperAppsView.vue'), meta: { title: '开放平台管理' } },
       { path: 'catalog', name: 'catalog', component: () => import('../views/CatalogHomeView.vue'), meta: { title: '产品与设备', anyPermissions: ['page:categories','page:products','page:devices','page:production'] } },
       { path: 'catalog/platform/categories', name:'platform-categories', component:()=>import('../views/ProductCategoriesView.vue'), meta:{title:'产品目录',permission:'page:categories',catalogPlatform:true} },

@@ -73,6 +73,8 @@ GET `/products` 的 category 参数为空时返回全部，一级 ID 匹配其�
 
 ## 产品配置
 
+产品详情已提供「固件管理」，支持产品固件通道、标准／自定义版本规则、不可覆盖的固件包元数据、显式源版本和硬件兼容清单，以及版本启停。支持通过通用 file-component 上传至标准 S3 私有桶，计算实际大小与摘要、使用可信公钥验证签名并按需签发临时下载地址；外部 HTTPS 登记仍只校验元数据格式。设备升级任务与灰度发布仍待实现，详见[固件管理与 OTA 实施](../../../docs/firmware-management.md)。产品档案中的 firmwareVersion 不表示设备实际上报版本。
+
 参考 JetLinks 的产品档案、设备类型、入网方式、传输协议和消息协议分层。产品的 configuration 保存档案配置，创建与保存草稿均可携带 configuration；旧客户端省略该字段时，创建使用默认值，更新保留已有配置。产品读取及列表返回配置，修改继续使用 product:write、租户角色、revision 和同事务审计。
 
 配置包括 category、manufacturer、modelNumber、deviceType（DIRECT/GATEWAY/CHILD）、networkWay（ETHERNET/WIFI/CELLULAR/NB_IOT/LORA/OTHER）、transportProtocol（MQTT）、messageProtocol（nebula-mqtt-v1）、dataFormat（JSON）、firmwareVersion、supportUrl 与 installationNotes。普通文本最多100字符，文档地址及维护说明最多1000字符，配置序列化后最多8192字符；文档地址仅接受 HTTP(S)。

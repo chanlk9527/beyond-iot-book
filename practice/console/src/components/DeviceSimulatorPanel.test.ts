@@ -27,9 +27,38 @@ function mount(allowed=true,data=detail(),embedded=false){
  app.mount(root);dispose=()=>{app.unmount();root.remove()};return {root,props}
 }
 function button(root:HTMLElement,label:string){return [...root.querySelectorAll('button')].find(b=>b.textContent===label)!}
+async function advancedFirmware(root:HTMLElement){const label=[...root.querySelectorAll('label')].find(l=>l.textContent?.includes('高级：上报完整多组件快照'))!;const checkbox=label.querySelector('input')!;checkbox.checked=true;checkbox.dispatchEvent(new Event('change'));await settle()}
 async function connect(root:HTMLElement){const confirm=root.querySelector('input')!;confirm.checked=true;confirm.dispatchEvent(new Event('change'));await settle();button(root,'连接设备').click();await settle();mock.state('connected');await settle()}
 beforeEach(()=>{vi.clearAllMocks();mock.publish.mockResolvedValue(undefined);vi.mocked(catalogApi.credential).mockResolvedValue({device:detail().device,clientId:'device',username:'device',secret:'secret'})})
 afterEach(()=>{dispose?.();vi.useRealTimers()})
+it('announces connecting, confirmed connection and unexpected disconnection with an actionable state',async()=>{
+ const {root}=mount();await settle()
+ expect(root.querySelector('[role="status"]')?.textContent).toContain('等待连接设备')
+ const confirm=root.querySelector('input')!;confirm.checked=true;confirm.dispatchEvent(new Event('change'));await settle()
+ button(root,'连接设备').click();await settle()
+ expect(root.querySelector('[role="status"]')?.textContent).toContain('正在连接设备')
+ expect(root.querySelector('.connection-established')).toBeNull()
+ mock.state('connected');await settle()
+ expect(root.querySelector('.sim-connection')?.classList.contains('is-connected')).toBe(true)
+ expect(root.querySelector('[role="status"]')?.textContent).toContain('设备已连接')
+ expect(root.querySelector('.connection-established')?.textContent).toContain('连接成功')
+ expect(root.querySelector('.connection-consent')).toBeNull()
+ mock.state('disconnected');await settle()
+ expect(root.querySelector('.connection-established')).toBeNull()
+ expect(root.querySelector('[role="status"]')?.textContent).toContain('重新连接')
+ expect(button(root,'连接设备').disabled).toBe(false)
+})
+it('explains the specific blocker even after consent and distinguishes failed connections',async()=>{
+ const data=detail();data.product.enabled=false
+ const {root,props}=mount(true,data);await settle()
+ expect(root.querySelector('[role="status"]')?.textContent).toContain('所属产品已停用')
+ const confirm=root.querySelector('input')!;confirm.checked=true;confirm.dispatchEvent(new Event('change'));await settle()
+ expect(button(root,'连接设备').disabled).toBe(true)
+ props.detail.product.enabled=true;await settle();button(root,'连接设备').click();await settle()
+ mock.state('disconnected');await settle()
+ expect(root.querySelector('[role="status"]')?.textContent).toContain('连接未成功')
+ expect(root.querySelector('.connection-established')).toBeNull()
+})
 it('reads credentials only on explicit connection and reports the bound model',async()=>{
  const {root}=mount();await settle();expect(catalogApi.credential).not.toHaveBeenCalled();expect(button(root,'连接设备').disabled).toBe(true)
  expect(root.textContent).not.toContain('secret');expect(root.textContent).toContain('v1')
@@ -38,6 +67,41 @@ it('reads credentials only on explicit connection and reports the bound model',a
  expect(mock.start).toHaveBeenCalledWith(expect.stringMatching(/^ws:\/\/.*\/mqtt$/),expect.objectContaining({secret:'secret'}))
  button(root,'上报属性').click();await settle()
  expect(mock.publish).toHaveBeenCalledWith(expect.objectContaining({method:'thing.property.report',data:{properties:{temperature:0}}}))
+})
+it('reports firmware info and complete component inventory over MQTT without pretending to install firmware',async()=>{
+ const {root}=mount();await connect(root);button(root,'固件信息上报').click();await settle()
+ await advancedFirmware(root)
+ const update=(label:string,value:string)=>{const input=root.querySelector(`[aria-label="${label}"]`) as HTMLInputElement;input.value=value;input.dispatchEvent(new Event('input'))}
+ update('模拟主模块固件版本','1.9.0');update('模拟硬件版本','HW-B');update('模拟组件版本 JSON',JSON.stringify({main:'1.9.0',mcu:'A7_R11'}));await settle()
+ const boot=(root.querySelector('[aria-label="模拟启动标识"]') as HTMLInputElement).value
+ button(root,'上报设备与组件固件信息').click();await settle()
+ expect(mock.publish).toHaveBeenNthCalledWith(1,expect.objectContaining({method:'thing.info.report',data:expect.objectContaining({firmwareVersion:'1.9.0',hardwareVersion:'HW-B',bootId:boot})}))
+ expect(mock.publish).toHaveBeenNthCalledWith(2,expect.objectContaining({method:'ota.version.report',data:{versions:{main:'1.9.0',mcu:'A7_R11'}}}))
+ expect(root.textContent).toContain('不下载、安装或验证真实固件')
+ button(root,'生成模拟重启标识').click();await settle();expect((root.querySelector('[aria-label="模拟启动标识"]') as HTMLInputElement).value).not.toBe(boot)
+})
+it('validates all firmware fields before sending either report',async()=>{
+ const {root}=mount();await connect(root)
+ await advancedFirmware(root)
+ const input=root.querySelector('[aria-label="模拟组件版本 JSON"]') as HTMLInputElement;input.value='{"main":123}';input.dispatchEvent(new Event('input'));await settle()
+ button(root,'上报设备与组件固件信息').click();await settle();expect(mock.publish).not.toHaveBeenCalled();expect(root.textContent).toContain('组件标识或版本无效')
+})
+it('quickly reports one main version without JSON editing and explains asynchronous persistence',async()=>{
+ const {root}=mount();await connect(root);button(root,'固件信息上报').click();await settle()
+ expect(root.querySelector('[aria-label="模拟组件版本 JSON"]')).toBeNull()
+ const input=root.querySelector('[aria-label="模拟主模块固件版本"]') as HTMLInputElement;input.value='1.9.0';input.dispatchEvent(new Event('input'));await settle()
+ button(root,'上报设备与组件固件信息').click();await settle()
+ expect(mock.publish).toHaveBeenNthCalledWith(1,expect.objectContaining({data:expect.objectContaining({firmwareVersion:'1.9.0'})}))
+ expect(mock.publish).toHaveBeenNthCalledWith(2,expect.objectContaining({method:'ota.version.report',data:{versions:{main:'1.9.0'}}}))
+ expect(root.textContent).toContain('业务入库可能稍有延迟');expect(root.textContent).toContain('替换已有 OTA 组件清单')
+})
+it('keeps both version reports consistent in advanced mode and reports partial failures',async()=>{
+ const {root}=mount();await connect(root);await advancedFirmware(root)
+ const input=root.querySelector('[aria-label="模拟组件版本 JSON"]') as HTMLInputElement;input.value='{"main":"2.0.0"}';input.dispatchEvent(new Event('input'));await settle()
+ button(root,'上报设备与组件固件信息').click();await settle();expect(mock.publish).not.toHaveBeenCalled();expect(root.textContent).toContain('必须与主模块固件版本一致')
+ input.value='{"main":"1.0.0"}';input.dispatchEvent(new Event('input'));await settle()
+ mock.publish.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('连接断开'))
+ button(root,'上报设备与组件固件信息').click();await settle();expect(root.textContent).toContain('组件报告未确认');expect(root.textContent).not.toContain('报告均已获 MQTT 接收确认')
 })
 it('does not connect readers or child devices',async()=>{
  const {root}=mount(false);await settle();expect(button(root,'连接设备').disabled).toBe(true);expect(catalogApi.credential).not.toHaveBeenCalled()
