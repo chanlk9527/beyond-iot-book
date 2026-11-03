@@ -12,6 +12,7 @@
 
 - [管理端快捷启动](STARTUP.md)：一条命令启动／重启／停止前后端，日常复用构建产物和依赖。
 - [平台架构与开发约定](docs/architecture.md)：模块边界、依赖方向和实现范围。
+- [规则与集成产品需求](docs/rule-engine.md)：数据流转、场景自动化、连接与通知的用户价值、页面形态、建设范围和验收要求；当前仅交付前端交互原型。
 - [物模型定义与支持范围](docs/thing-model.md)：属性、功能、事件、枚举、数组与版本边界。
 - [EventBus](backend/EVENTBUS.md)：模式选择、Dubbo 路由、监控与交付边界。
 - [MQTT 默认设备协议](docs/mqtt-protocol.md)：直连设备与网关子设备的连接、Topic、报文和交互规则。

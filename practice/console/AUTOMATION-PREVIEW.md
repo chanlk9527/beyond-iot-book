@@ -1,5 +1,7 @@
 # 规则与集成交互预览
 
+产品定位、用户价值、目标功能与分阶段验收见[规则与集成产品需求](../docs/rule-engine.md)。本文件仅维护前端原型的访问方式、操作范围和验证命令，不代表后端已交付。
+
 开发服务器运行后，访问 `/automation-preview.html#/automation/flows`，无需后端或账号即可体验独立的示例工作空间。该开发入口使用独立 Hash 路由和内存示例身份，不导入管理端认证路由、不登录后端、不调用管理 API；默认生产构建不包含此 HTML 入口。
 
 管理端登录后，平台超管可从「规则与集成 · 预览」进入 `/automation/flows`、`/automation/scenes`、`/automation/connections`、`/automation/notifications` 和 `/automation/runs`。租户权限和后端 API 尚未交付，因此预览路由不向普通账号开放。
