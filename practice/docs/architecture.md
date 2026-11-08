@@ -43,7 +43,7 @@ backend/
 │   ├── cluster-component           已实现节点注册、租约、共享目录及持久化排空／恢复接入
 │   ├── message-component           已实现 Local／Kafka 与可选 Dubbo 发布侧订阅路由、持久投递和节点广播
 │   ├── media-component             已实现统一观看信令端口与 AWS KVS WebRTC 适配
-│   ├── rule-component              规则计算、输入输出转换与动作提交契约；目标模块
+│   ├── rule-component              已有规则图、条件/映射、配置转换与样例计算；动作提交待实现
 │   ├── storage-component           历史存储 SPI、能力声明与 TDengine 适配
 │   ├── notification-component      通知渠道、模板与投递
 │   └── file-component              文件与制品存储、下载授权
@@ -261,7 +261,7 @@ Worker 是运行角色，业务逻辑属于各自领域模块，启动层只负�
 | --- | --- | --- |
 | 上行、影子、状态、命令反馈 | device-manager 的后台入口与用例 | 第一版 |
 | Outbox、路由、超时恢复 | 消息和网关组件及对应业务任务 | 第一版 |
-| 规则与场景联动 | rule-manager / rule-component | 后续核心 |
+| 规则与场景联动 | rule-manager / rule-component | 本地计算基础已实现；管理与持久运行待实现 |
 | 告警去重、抑制、恢复与流转 | alarm-manager | 后续核心 |
 | 通知、Webhook 与外部转发 | notification-component / integration-manager | 后续核心 |
 | OTA 批次推进、反馈与超时 | ota-manager | 后续核心 |
@@ -340,11 +340,11 @@ Worker 是运行角色，业务逻辑属于各自领域模块，启动层只负�
 
 ## 规则与集成边界
 
-用户定位、页面形态、用户价值、功能范围及分阶段验收集中维护在[规则与集成产品需求](rule-engine.md)。当前只有[管理端交互原型](../console/AUTOMATION-PREVIEW.md)，尚无规则管理 API、持久运行服务、EventBus 规则消费、真实外部投递或通知发送。
+用户定位、页面形态、用户价值、功能范围及分阶段验收集中维护在[规则与集成产品需求](rule-engine.md)。当前已有[管理端交互原型](../console/AUTOMATION-PREVIEW.md)和 [rule-component 本地计算基础](../backend/platform-components/rule-component/README.md)，尚无规则管理 API、持久运行服务、EventBus 规则消费、真实外部投递或通知发送。节点模型和各阶段状态见[设计与实施记录](rule-engine-implementation.md)。
 
 规则引擎通过“数据流转”和“场景自动化”服务不同用户任务；原样消息转发是数据流转关闭处理步骤的特例，不另建消息订阅业务模块。连接和通知是独立复用能力；告警实例管理按需扩展，不承担规则的时间条件、冷却和恢复判断。复杂拖拽编排与完整 SQL 不是首版前提，SQL 方言及执行器尚未选定。
 
-目标职责为：rule-component 提供计算与动作提交契约，rule-manager 管理规则版本和执行；integration-manager 管理外部连接及持久转发任务；notification-component 提供渠道适配，notification-manager 管理模板与发送业务；设备控制调用 device-manager 的公开用例。管理模块不跨实现调用或改写对方数据，不通过增加反向依赖形成循环；接线与适配由 bootstrap 组装，跨进程通过公开契约交互。以上是模块规划，不预建空模块。
+目标职责为：rule-component 提供计算与动作提交契约，rule-manager 管理规则版本和执行；integration-manager 管理外部连接及持久转发任务；notification-component 提供渠道适配，notification-manager 管理模板与发送业务；设备控制调用 device-manager 的公开用例。管理模块不跨实现调用或改写对方数据，不通过增加反向依赖形成循环；接线与适配由 bootstrap 组装，跨进程通过公开契约交互。其中 rule-component 已实现规则图、组合条件、字段映射、执行器 SPI、本地同步运行及场景/流转配置转换和 Java 样例 API；动作提交契约与其他模块仍为规划，不预建空模块。
 
 规则管理与发布 API 装入 management，运行、动作分发和投递恢复装入 worker；access 继续负责可信设备事件接入，不在网络线程执行用户规则或等待外部系统。消息源解析为主题与可信租户／产品／设备选择器，载荷条件和字段转换留在规则计算层。Dubbo 可复用现有发布侧索引，Kafka 当前在消费侧过滤且最多 64 个服务订阅，不能按每条用户规则无界创建消费组。订阅合并／共享分发的实施设计需保留这些模式差异，不能把全量消费后的过滤描述为发布侧裁剪。
 
