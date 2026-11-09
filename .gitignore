@@ -1,7 +1,7 @@
 node_modules/
-.vitepress/cache/
-.vitepress/dist/
-.vitepress/config.*.timestamp-*
+book/.vitepress/cache/
+book/.vitepress/dist/
+book/.vitepress/config.*.timestamp-*
 .vercel/
 .idea/
 *.log

@@ -4,7 +4,7 @@
 
 ## 本地阅读
 
-使用 Node.js 24（与 Vercel 保持一致），在项目根目录运行：
+使用 Node.js 24（与 Vercel 保持一致），在仓库的 `book/` 目录运行：
 
 ```sh
 npm ci
@@ -27,7 +27,7 @@ npm run docs:preview
 1. 将书稿、网站配置和 `package-lock.json` 一起提交并推送到 GitHub 仓库。
 2. 在 Vercel 选择 **Add New → Project**，导入这个仓库。
 3. Root Directory 保持仓库根目录；Node.js Version 选择 **24.x**。
-4. 仓库中的 `vercel.json` 已设置：Framework Preset 为 **VitePress**，Install Command 为 `npm ci`，Build Command 为 `npm run docs:build`，Output Directory 为 `.vitepress/dist`。
+4. 仓库中的 `vercel.json` 已设置：Framework Preset 为 **VitePress**，Install Command 为 `npm --prefix book ci`，Build Command 为 `npm --prefix book run docs:build`，Output Directory 为 `book/.vitepress/dist`。
 5. 点击 **Deploy**。部署完成后使用 Vercel 提供的网址访问；需要自定义域名时，在项目 Settings → Domains 中添加。
 
 之后推送到 Vercel 设置的生产分支会更新正式网站；其他分支或 Pull Request 可生成预览部署。正式发布前检查首页、中文搜索、第一章图示和章节直达链接，并在目标读者的网络中确认访问效果。
@@ -38,7 +38,7 @@ npm run docs:preview
 
 公开页面包括首页、`SUMMARY.md`，以及 `manuscript/` 下的正文与分部导读。作者约定、本文件和设计文档不会生成网站页面。Markdown 中引用的图示作为静态资源发布。
 
-正文网址省略 `manuscript/` 前缀，例如第一章为 `/part-01-iot-platform/01-iot-world`。分部导读使用 `/part-01-iot-platform/`，目录使用 `/contents`。已有 Markdown 相对链接由主题配置中的构建规则转换。示例源码由 `prepare.mjs` 在开发或构建前复制到公共资源目录，无须维护第二份副本。
+正文网址省略 `manuscript/` 前缀，例如第一章为 `/part-01-iot-platform/01-iot-world`。分部导读使用 `/part-01-iot-platform/`，目录使用 `/contents`。已有 Markdown 相对链接由主题配置中的构建规则转换。网站仅构建 `book/` 内的内容，不扫描平台代码与开发文档。
 
 多页章节保留章首页网址，主题页面位于同名目录，例如 `/part-01-iot-platform/01-iot-world/01-boundaries`。`SUMMARY.md` 中章链接下缩进两格的页面会进入章节侧栏和连续阅读顺序。新增或调整锚点时应同步维护对应的映射。
 

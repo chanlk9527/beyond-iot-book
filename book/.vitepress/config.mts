@@ -12,7 +12,7 @@ export default defineConfig({
   title: 'IoT 平台设计',
   description: '从设备接入、数据语义到平台运行与演进的在线书稿。',
   cleanUrls: true,
-  srcExclude: ['README.md', 'BOOK-DESIGN.md', 'WRITING.md', 'VOICE.md', 'ILLUSTRATIONS.md', 'DEPLOYMENT.md'],
+  srcExclude: ['AGENTS.md', 'temp/**', 'README.md', 'BOOK-DESIGN.md', 'WRITING.md', 'VOICE.md', 'ILLUSTRATIONS.md', 'DEPLOYMENT.md'],
   rewrites: {
     ...pageAliases,
     'manuscript/:part/_index.md': ':part/index.md',

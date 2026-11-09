@@ -8,7 +8,7 @@
 
 **Tech Stack:** Java 21、Spring MVC、Spring Boot、JUnit 5、现有 `video-manager` 和 `device-manager` 模块。
 
-**Spec:** `manuscript/part-01-iot-platform/02-nebula-iot-platform/2.6-open-capability-platform.md`
+**Spec:** `book/manuscript/part-01-iot-platform/02-nebula-iot-platform/2.6-open-capability-platform.md`
 
 ## Global Constraints
 
